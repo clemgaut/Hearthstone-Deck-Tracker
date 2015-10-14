@@ -342,27 +342,44 @@ namespace Hearthstone_Deck_Tracker
         private void BtnExtractPlays_Click(object sender, RoutedEventArgs e)
         {
             GameStats selected = DataGridGames.SelectedItem as GameStats;
-            if (selected != null)
+            if (selected != null && selected.HasReplayFile)
             {
-                if (selected.HasReplayFile && !Keyboard.IsKeyDown(Key.LeftCtrl))
-                {
-                    var replay = ReplayReader.LoadReplay(selected.ReplayFile);
+                string dirName = Helper.ShowDirectoryDialog("");
+                saveSimpleLog(selected, dirName);
+            }
+        }
 
-                    var playedCardsNames = GetPlayedCards(replay);
-
-                    using (StreamWriter outputFile = new StreamWriter(Path.ChangeExtension(selected.ReplayFile, ".simpleLog")))
-                    {
-                        foreach (string cardName in playedCardsNames)
-                            outputFile.WriteLine(cardName);
-                    }
-                }
+        private void BtnExtractAllPlays_Click(object sender, RoutedEventArgs e)
+        {
+            string dirName = Helper.ShowDirectoryDialog("");
+            foreach (GameStats selected in DataGridGames.Items)
+            {
+                saveSimpleLog(selected, dirName);
             }
         }
 
         private void BtnOverallExtractPlays_Click(object sender, RoutedEventArgs e)
         {
             GameStats selected = DataGridOverallGames.SelectedItem as GameStats;
-            if (selected != null)
+            if (selected != null && selected.HasReplayFile)
+            {
+                string dirName = Helper.ShowDirectoryDialog("");
+                saveSimpleLog(selected, dirName);
+            }
+        }
+
+        private void BtnOverallExtractAllPlays_Click(object sender, RoutedEventArgs e)
+        {
+            string dirName = Helper.ShowDirectoryDialog("");
+            foreach (GameStats selected in DataGridOverallGames.Items)
+            {
+                saveSimpleLog(selected, dirName);
+            }
+        }
+
+        private void saveSimpleLog(GameStats selected, string dirName)
+        {
+            if (selected != null && dirName!=null)
             {
                 if (selected.HasReplayFile && !Keyboard.IsKeyDown(Key.LeftCtrl))
                 {
@@ -370,7 +387,7 @@ namespace Hearthstone_Deck_Tracker
 
                     var playedCardsNames = GetPlayedCards(replay);
 
-                    using (StreamWriter outputFile = new StreamWriter(Path.ChangeExtension(selected.ReplayFile, ".simpleLog")))
+                    using (StreamWriter outputFile = new StreamWriter(Path.Combine(dirName, Path.ChangeExtension(selected.ReplayFile, ".simpleLog"))))
                     {
                         foreach (string cardName in playedCardsNames)
                             outputFile.WriteLine(cardName);
@@ -543,6 +560,7 @@ namespace Hearthstone_Deck_Tracker
 			BtnOverallMoveToOtherDeck.IsEnabled = enabled;
 			BtnOverallEditGame.IsEnabled = enabled;
             BtnOverallExtractPlays.IsEnabled = enabled;
+            BtnOverallExtractAllPlays.IsEnabled = enabled;
 			if(DataGridOverallGames.SelectedItems.Count > 0)
 			{
 				var selectedGames = DataGridOverallGames.SelectedItems.Cast<GameStats>().ToList();
@@ -585,6 +603,7 @@ namespace Hearthstone_Deck_Tracker
 			BtnMoveToOtherDeck.IsEnabled = enabled;
 			BtnEditGame.IsEnabled = enabled;
             BtnExtractPlays.IsEnabled = enabled;
+            BtnExtractAllPlays.IsEnabled = enabled;
 			if(Core.MainWindow.FlyoutOpponentDeck.IsOpen)
 			{
 				var game = DataGridGames.SelectedItem as GameStats;

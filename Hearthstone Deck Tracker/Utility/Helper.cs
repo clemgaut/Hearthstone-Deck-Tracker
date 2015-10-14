@@ -184,7 +184,19 @@ namespace Hearthstone_Deck_Tracker
 			return null;
 		}
 
-		public static string GetValidFilePath(string dir, string name, string extension)
+        public static string ShowDirectoryDialog(string baseDir)
+        {
+            System.Windows.Forms.FolderBrowserDialog fbd = new System.Windows.Forms.FolderBrowserDialog();
+            fbd.SelectedPath = baseDir;
+            System.Windows.Forms.DialogResult result = fbd.ShowDialog();
+
+            if (result == System.Windows.Forms.DialogResult.OK)
+                return fbd.SelectedPath;
+            return null;
+        }
+
+
+        public static string GetValidFilePath(string dir, string name, string extension)
 		{
 			var validDir = RemoveInvalidPathChars(dir);
 			if(!Directory.Exists(validDir))
