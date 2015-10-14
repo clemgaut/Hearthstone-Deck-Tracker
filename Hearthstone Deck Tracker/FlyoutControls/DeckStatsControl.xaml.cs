@@ -19,6 +19,8 @@ using Hearthstone_Deck_Tracker.Utility;
 using Hearthstone_Deck_Tracker.Windows;
 using MahApps.Metro.Controls;
 using MahApps.Metro.Controls.Dialogs;
+using Hearthstone_Deck_Tracker.Enums.Hearthstone;
+using System.IO;
 
 #endregion
 
@@ -337,7 +339,132 @@ namespace Hearthstone_Deck_Tracker
 			OpenGameDetails(DataGridGames.SelectedItem as GameStats);
 		}
 
-		private void DGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private void BtnExtractPlays_Click(object sender, RoutedEventArgs e)
+        {
+            GameStats selected = DataGridGames.SelectedItem as GameStats;
+            if (selected != null)
+            {
+                if (selected.HasReplayFile && !Keyboard.IsKeyDown(Key.LeftCtrl))
+                {
+                    var replay = ReplayReader.LoadReplay(selected.ReplayFile);
+
+                    var playedCardsNames = GetPlayedCards(replay);
+
+                    using (StreamWriter outputFile = new StreamWriter(Path.ChangeExtension(selected.ReplayFile, ".simpleLog")))
+                    {
+                        foreach (string cardName in playedCardsNames)
+                            outputFile.WriteLine(cardName);
+                    }
+                }
+            }
+        }
+
+        private void BtnOverallExtractPlays_Click(object sender, RoutedEventArgs e)
+        {
+            GameStats selected = DataGridOverallGames.SelectedItem as GameStats;
+            if (selected != null)
+            {
+                if (selected.HasReplayFile && !Keyboard.IsKeyDown(Key.LeftCtrl))
+                {
+                    var replay = ReplayReader.LoadReplay(selected.ReplayFile);
+
+                    var playedCardsNames = GetPlayedCards(replay);
+
+                    using (StreamWriter outputFile = new StreamWriter(Path.ChangeExtension(selected.ReplayFile, ".simpleLog")))
+                    {
+                        foreach (string cardName in playedCardsNames)
+                            outputFile.WriteLine(cardName);
+                    }
+                }
+            }
+        }
+
+        // Returns all played cards (hero power and result included)
+        public List<string> GetPlayedCards(List<ReplayKeyPoint> replay)
+        {
+            List<string> playedCards = new List<string>();
+            if (replay == null || replay.Count == 0)
+                return playedCards;
+
+            var currentGameState = replay.FirstOrDefault(r => r.Data.Any(x => x.HasTag(GAME_TAG.PLAYER_ID)));
+
+            if (currentGameState == null)
+            {
+                Logger.WriteLine("Error loading replay. No player entity found.");
+                return playedCards;
+            }
+
+            var currentTurn = -1;
+            foreach (var kp in replay)
+            {
+                var entity = kp.Data.FirstOrDefault(x => x.Id == kp.Id);
+                if (entity == null || (string.IsNullOrEmpty(entity.CardId) && kp.Type != KeyPointType.Victory && kp.Type != KeyPointType.Defeat))
+                    continue;
+                if (kp.Type == KeyPointType.Summon && entity.GetTag(GAME_TAG.CARDTYPE) == (int)TAG_CARDTYPE.ENCHANTMENT)
+                    continue;
+                var turn = (kp.Turn + 1) / 2;
+                if (turn == 1)
+                {
+                    if (!kp.Data.Any(x => x.HasTag(GAME_TAG.PLAYER_ID) && x.GetTag(GAME_TAG.RESOURCES) == 1))
+                        turn = 0;
+                }
+                if (turn > currentTurn)
+                    currentTurn = turn;
+                string turnString = "turn " + currentTurn;
+                string cardName="";
+                string playerString="";
+                switch (kp.Type)
+                {
+                    case KeyPointType.Attack:
+                        continue;
+                        break;
+                    case KeyPointType.Death:
+                        continue;
+                        break;
+                    case KeyPointType.Mulligan:
+                    case KeyPointType.DeckDiscard:
+                    case KeyPointType.HandDiscard:
+                        continue;
+                        break;
+                    case KeyPointType.Draw:
+                    case KeyPointType.Obtain:
+                    case KeyPointType.PlayToDeck:
+                    case KeyPointType.PlayToHand:
+                        continue;
+                        break;
+                    case KeyPointType.HeroPower:
+                        cardName = Database.GetCardFromId(kp.GetCardId()).Name;
+                        break;
+                    case KeyPointType.SecretStolen:
+                    case KeyPointType.SecretTriggered:
+                        continue;
+                        break;
+                    case KeyPointType.Play:
+                    case KeyPointType.PlaySpell:
+                    case KeyPointType.SecretPlayed:
+                        cardName = Database.GetCardFromId(kp.GetCardId()).Name;
+                        break;
+                    case KeyPointType.Summon:
+                        continue;
+                        break;
+                    case KeyPointType.Defeat:
+                        cardName = "Defeat";
+                        break;
+                    case KeyPointType.Victory:
+                        cardName = "Victory";
+                        break;
+                }
+                if(kp.Player == ActivePlayer.Player)
+                    playerString = "Me";
+                if (kp.Player == ActivePlayer.Opponent)
+                    playerString = "Opponent";
+
+                playedCards.Add(playerString + " on " + turnString + ":" + cardName);
+            }
+            return playedCards;
+        }
+
+        private void DGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
 		{
 			var target = e.OriginalSource as DependencyObject;
 			if(target == null)
@@ -415,6 +542,7 @@ namespace Hearthstone_Deck_Tracker
 			BtnOverallShowOpponentDeck.IsEnabled = enabled;
 			BtnOverallMoveToOtherDeck.IsEnabled = enabled;
 			BtnOverallEditGame.IsEnabled = enabled;
+            BtnOverallExtractPlays.IsEnabled = enabled;
 			if(DataGridOverallGames.SelectedItems.Count > 0)
 			{
 				var selectedGames = DataGridOverallGames.SelectedItems.Cast<GameStats>().ToList();
@@ -456,6 +584,7 @@ namespace Hearthstone_Deck_Tracker
 			BtnNote.IsEnabled = enabled;
 			BtnMoveToOtherDeck.IsEnabled = enabled;
 			BtnEditGame.IsEnabled = enabled;
+            BtnExtractPlays.IsEnabled = enabled;
 			if(Core.MainWindow.FlyoutOpponentDeck.IsOpen)
 			{
 				var game = DataGridGames.SelectedItem as GameStats;
@@ -1029,5 +1158,5 @@ namespace Hearthstone_Deck_Tracker
 				return _percent ? GetPercent(hsClass) : GetWinLoss(hsClass);
 			}
 		}
-	}
+    }
 }

@@ -446,6 +446,9 @@
                                             <Button x:Name="BtnDetails" IsEnabled="False" Content="Show Replay"
                                         Margin="5,0,0,0"
                                         Width="120" VerticalAlignment="Bottom" Click="BtnDetails_Click" />
+                                           <Button x:Name="BtnExtractPlays" IsEnabled="False" Content="Extract plays"
+                                        Margin="5,0,0,0"
+                                        Width="120" VerticalAlignment="Bottom" Click="BtnExtractPlays_Click" />
                                             <Button x:Name="BtnShowOpponentDeck" IsEnabled="False" Content="Show Opp. Deck"
                                         Margin="5,0,0,0"
                                         Width="120" VerticalAlignment="Bottom" Click="BtnShowOpponentDeck_Click" />
@@ -773,6 +776,9 @@
                                             <Button x:Name="BtnOverallDetails" IsEnabled="False"
                                                     Content="Show replay" Margin="5,0,0,0"
                                                     Width="120" VerticalAlignment="Bottom" Click="BtnOverallDetails_Click" />
+                                            <Button x:Name="BtnOverallExtractPlays" IsEnabled="False" Content="Extract plays"
+                                                    Margin="5,0,0,0"
+                                                    Width="120" VerticalAlignment="Bottom" Click="BtnOverallExtractPlays_Click" />
                                             <Button x:Name="BtnOverallShowOpponentDeck" IsEnabled="False"
                                                     Content="Show Opp. Deck" Margin="5,0,0,0"
                                                     Width="120" VerticalAlignment="Bottom" Click="BtnOverallShowOpponentDeck_Click" />
