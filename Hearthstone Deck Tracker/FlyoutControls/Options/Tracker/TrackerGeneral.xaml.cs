@@ -36,7 +36,10 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 			CheckboxNoteDialogDelayed.IsEnabled = Config.Instance.ShowNoteDialogAfterGame;
 			CheckboxCardFrameRarity.IsChecked = Config.Instance.RarityCardFrames;
 			CheckboxCardGemRarity.IsChecked = Config.Instance.RarityCardGems;
-			_initialized = true;
+			CheckboxArenaRewardDialog.IsChecked = Config.Instance.ArenaRewardDialog;
+			CheckboxTurnTime.IsChecked = Config.Instance.TimerTurnTime == 75;
+            CheckboxSpectatorUseNoDeck.IsChecked = Config.Instance.SpectatorUseNoDeck;
+            _initialized = true;
 		}
 
 		private void CheckboxAutoSelectDeck_Checked(object sender, RoutedEventArgs e)
@@ -274,5 +277,55 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 			Core.MainWindow.ShowMessage("Restart required.", "Please restart HDT for this setting to take effect.");
 
 		}
+
+		private void CheckboxArenaRewardDialog_Checked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.ArenaRewardDialog = true;
+			Config.Save();
+		}
+
+		private void CheckboxArenaRewardDialog_Unchecked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.ArenaRewardDialog = false;
+			Config.Save();
+		}
+
+		private void CheckboxTurnTime_Checked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.TimerTurnTime = 75;
+			Config.Save();
+			TurnTimer.Instance.SetTurnTime(75);
+		}
+
+		private void CheckboxTurnTime_Unchecked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.TimerTurnTime = 90;
+			Config.Save();
+			TurnTimer.Instance.SetTurnTime(90);
+		}
+
+        private void CheckboxSpectatorUseNoDeck_Checked(object sender, RoutedEventArgs e)
+        {
+            if (!_initialized)
+                return;
+            Config.Instance.SpectatorUseNoDeck = true;
+            Config.Save();
+        }
+
+        private void CheckboxSpectatorUseNoDeck_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (!_initialized)
+                return;
+            Config.Instance.SpectatorUseNoDeck = false;
+            Config.Save();
+        }
 	}
 }

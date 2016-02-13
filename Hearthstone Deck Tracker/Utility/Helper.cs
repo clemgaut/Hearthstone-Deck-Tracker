@@ -25,10 +25,12 @@ using Hearthstone_Deck_Tracker.FlyoutControls;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Windows;
 using MahApps.Metro;
+using MahApps.Metro.Controls;
 using MahApps.Metro.Controls.Dialogs;
 using Microsoft.Win32;
 using Card = Hearthstone_Deck_Tracker.Hearthstone.Card;
 using Color = System.Drawing.Color;
+using MediaColor = System.Windows.Media.Color;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
 using Point = System.Drawing.Point;
 using Region = Hearthstone_Deck_Tracker.Enums.Region;
@@ -52,6 +54,7 @@ namespace Hearthstone_Deck_Tracker
 			{"French", "frFR"},
 			{"German", "deDE"},
 			{"Italian", "itIT"},
+			{"Japanese", "jaJP"},
 			{"Korean", "koKR"},
 			{"Polish", "plPL"},
 			{"Portuguese (Brazil)", "ptBR"},
@@ -59,6 +62,11 @@ namespace Hearthstone_Deck_Tracker
 			{"Spanish (Mexico)", "esMX"},
 			{"Spanish (Spain)", "esES"}
 		};
+		public static readonly List<string> LatinLanguages = new List<string>
+		{
+			"enUS", "enGB", "frFR", "deDE", "itIT", "ptBR", "esMX", "esES"
+		};
+
 
         [Obsolete("Use Core.MainWindow")]
 		public static MainWindow MainWindow { get { return Core.MainWindow; } }
@@ -196,7 +204,7 @@ namespace Hearthstone_Deck_Tracker
         }
 
 
-        public static string GetValidFilePath(string dir, string name, string extension)
+		public static string GetValidFilePath(string dir, string name, string extension)
 		{
 			var validDir = RemoveInvalidPathChars(dir);
 			if(!Directory.Exists(validDir))
@@ -338,11 +346,11 @@ namespace Hearthstone_Deck_Tracker
                 Core.Windows.OpponentWindow.SetOpponentCardCount(game.Opponent.HandCount, game.Opponent.DeckCount, game.Opponent.HasCoin);
 
 
-			if(MainWindow.NeedToIncorrectDeckMessage && !MainWindow.IsShowingIncorrectDeckMessage && game.CurrentGameMode != GameMode.Spectator
+			if(Core.MainWindow.NeedToIncorrectDeckMessage && !Core.MainWindow.IsShowingIncorrectDeckMessage && game.CurrentGameMode != GameMode.Spectator
 				&& game.IgnoreIncorrectDeck != DeckList.Instance.ActiveDeck)
 			{
-				MainWindow.IsShowingIncorrectDeckMessage = true;
-				MainWindow.ShowIncorrectDeckMessage();
+				Core.MainWindow.IsShowingIncorrectDeckMessage = true;
+				Core.MainWindow.ShowIncorrectDeckMessage();
 			}
 		}
 
@@ -428,15 +436,15 @@ namespace Hearthstone_Deck_Tracker
 
 		public static async Task SetupConstructedImporting(GameV2 game)
 		{
-			var settings = new MetroDialogSettings {AffirmativeButtonText = "continue"};
+			var settings = new MessageDialogs.Settings {AffirmativeButtonText = "continue"};
 			if(!game.IsRunning)
-				await MainWindow.ShowMessageAsync("Step 0:", "Start Hearthstone", settings: settings);
-			await MainWindow.ShowMessageAsync("Step 1:", "Go to the main menu", settings: settings);
+				await Core.MainWindow.ShowMessageAsync("Step 0:", "Start Hearthstone", settings: settings);
+			await Core.MainWindow.ShowMessageAsync("Step 1:", "Go to the main menu", settings: settings);
 			SettingUpConstructedImporting = true;
 			await
-				MainWindow.ShowMessageAsync("Step 2:",
+				Core.MainWindow.ShowMessageAsync("Step 2:",
 				                            "Open \"My Collection\" and click each class icon at the top once.\n\n- Do not click on neutral\n- Do not open any decks\n- Do not flip the pages.",
-				                            settings: new MetroDialogSettings {AffirmativeButtonText = "done"});
+				                            settings: new MessageDialogs.Settings {AffirmativeButtonText = "done"});
 			Config.Instance.ConstructedImportingIgnoreCachedIds = game.PossibleConstructedCards.Select(c => c.Id).ToArray();
 			Config.Save();
 			SettingUpConstructedImporting = false;
@@ -690,7 +698,7 @@ namespace Hearthstone_Deck_Tracker
         {
             if(Config.Instance.SaveDataInAppData == null)
                 return;
-            var appDataReplayDirPath = Config.Instance.AppDataPath + @"\Replays";
+            var appDataReplayDirPath = Config.AppDataPath + @"\Replays";
             var dataReplayDirPath = Config.Instance.DataDirPath + @"\Replays";
             if(Config.Instance.SaveDataInAppData.Value)
             {
@@ -739,14 +747,71 @@ namespace Hearthstone_Deck_Tracker
                              ? ThemeManager.DetectAppStyle().Item2 : ThemeManager.Accents.First(a => a.Name == Config.Instance.AccentName);
             ThemeManager.ChangeAppStyle(Application.Current, accent, theme);
             Application.Current.Resources["GrayTextColorBrush"] = theme.Name == "BaseLight"
-                                                                           ? new SolidColorBrush((System.Windows.Media.Color)Application.Current.Resources["GrayTextColor1"])
-                                                                           : new SolidColorBrush((System.Windows.Media.Color)Application.Current.Resources["GrayTextColor2"]);
+                                                                           ? new SolidColorBrush((MediaColor)Application.Current.Resources["GrayTextColor1"])
+                                                                           : new SolidColorBrush((MediaColor)Application.Current.Resources["GrayTextColor2"]);
 
         }
 
 		public static double GetScaledXPos(double left, int width, double ratio)
 		{
 			return (width * ratio * left) + (width * (1 - ratio) / 2);
+		}
+
+		public static Dictionary<string, MediaColor> ClassicClassColors = new Dictionary<string, MediaColor>
+		{
+			{"Druid", MediaColor.FromArgb(0xFF, 0xFF, 0x7D, 0x0A)}, //#FF7D0A, 
+			{"Death Knight", MediaColor.FromArgb(0xFF, 0xC4, 0x1F, 0x3B)}, //#C41F3B,
+			{"Hunter", MediaColor.FromArgb(0xFF, 0xAB, 0xD4, 0x73)}, //#ABD473,
+			{"Mage", MediaColor.FromArgb(0xFF, 0x69, 0xCC, 0xF0)}, //#69CCF0,
+			{"Monk", MediaColor.FromArgb(0xFF, 0x00, 0xFF, 0x96)}, //#00FF96,
+			{"Paladin", MediaColor.FromArgb(0xFF, 0xF5, 0x8C, 0xBA)}, //#F58CBA,
+			{"Priest", MediaColor.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)}, //#FFFFFF,
+			{"Rogue", MediaColor.FromArgb(0xFF, 0xFF, 0xF5, 0x69)}, //#FFF569,
+			{"Shaman", MediaColor.FromArgb(0xFF, 0x00, 0x70, 0xDE)}, //#0070DE,
+			{"Warlock", MediaColor.FromArgb(0xFF, 0x94, 0x82, 0xC9)}, //#9482C9,
+			{"Warrior", MediaColor.FromArgb(0xFF, 0xC7, 0x9C, 0x6E)}, //#C79C6E
+		};
+
+		public static Dictionary<string, MediaColor> HearthStatsClassColors = new Dictionary<string, MediaColor>
+		{
+			{"Druid", MediaColor.FromArgb(0xFF, 0x62, 0x31, 0x13)}, //#623113,
+			{"Death Knight", MediaColor.FromArgb(0xFF, 0xC4, 0x1F, 0x3B)}, //#C41F3B,
+			{"Hunter", MediaColor.FromArgb(0xFF, 0x20, 0x8D, 0x43)}, //#208D43,
+			{"Mage", MediaColor.FromArgb(0xFF, 0x25, 0x81, 0xBC)}, //#2581BC,
+			{"Monk", MediaColor.FromArgb(0xFF, 0x00, 0xFF, 0x96)}, //#00FF96,
+			{"Paladin", MediaColor.FromArgb(0xFF, 0xFB, 0xD7, 0x07)}, //#FBD707,
+			{"Priest", MediaColor.FromArgb(0xFF, 0xA3, 0xB2, 0xB2)}, //#A3B2B2,
+			{"Rogue", MediaColor.FromArgb(0xFF, 0x2F, 0x2C, 0x27)}, //#2F2C27,
+			{"Shaman", MediaColor.FromArgb(0xFF, 0x28, 0x32, 0x73)}, //#283273,
+			{"Warlock", MediaColor.FromArgb(0xFF, 0x4F, 0x26, 0x69)}, //#4F2669,
+			{"Warrior", MediaColor.FromArgb(0xFF, 0xB3, 0x20, 0x25)}, //#B32025
+		};
+
+		public static MediaColor GetClassColor(string className, bool priestAsGray)
+		{
+			if(string.IsNullOrEmpty(className))
+				return Colors.DimGray;
+            MediaColor color;
+		    if (Config.Instance.ClassColorScheme == ClassColorScheme.HearthStats)
+		    {
+		        if (!HearthStatsClassColors.TryGetValue(className, out color))
+		            color = Colors.DimGray;
+		    }
+		    else
+		    {
+		        if (className == "Priest" && priestAsGray)
+		            color = MediaColor.FromArgb(0xFF, 0xD2, 0xD2, 0xD2); //#D2D2D2
+		        else if (!ClassicClassColors.TryGetValue(className, out color))
+		            color = MediaColor.FromArgb(0xFF, 0x80, 0x80, 0x80); //#808080
+		    }
+		    return color;
+		}
+		public static MetroWindow GetParentWindow(DependencyObject current)
+		{
+			var parent = VisualTreeHelper.GetParent(current);
+			while(parent != null && !(parent is MetroWindow))
+				parent = VisualTreeHelper.GetParent(parent);
+			return (MetroWindow)parent;
 		}
 	}
 }

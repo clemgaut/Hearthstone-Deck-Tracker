@@ -32,9 +32,10 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                 if (int.TryParse(rawTag, out tmp) && Enum.IsDefined(typeof(GAME_TAG), tmp))
                     tag = (GAME_TAG)tmp;
             }
-            var value = HsLogReaderV2.ParseTagValue(tag, rawValue);
-            var prevZone = game.Entities[id].GetTag(GAME_TAG.ZONE);
+            var value = LogReaderHelper.ParseTagValue(tag, rawValue);
+            var prevValue = game.Entities[id].GetTag(tag);
             game.Entities[id].SetTag(tag, value);
+
 
             if (tag == GAME_TAG.CONTROLLER && gameState.WaitForController != null && game.Player.Id == -1)
             {
@@ -47,7 +48,7 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                     if (p2 != null)
                         p2.IsPlayer = value != 1;
                     game.Player.Id = value;
-                    game.Opponent.Id = value == 1 ? 2 : 1;
+                    game.Opponent.Id = value % 2 + 1;
                 }
                 else
                 {
@@ -55,31 +56,27 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                         p1.IsPlayer = value != 1;
                     if (p2 != null)
                         p2.IsPlayer = value == 1;
-                    game.Player.Id = value == 1 ? 2 : 1;
+                    game.Player.Id = value % 2 + 1;
                     game.Opponent.Id = value;
                 }
             }
             var controller = game.Entities[id].GetTag(GAME_TAG.CONTROLLER);
-            var player = game.Entities[id].HasTag(GAME_TAG.CONTROLLER) ? (controller == game.Player.Id ? "FRIENDLY" : "OPPOSING") : "";
             var cardId = game.Entities[id].CardId;
             if (tag == GAME_TAG.ZONE)
             {
-                //Logger.WriteLine("--------" + player + " " + game.Entities[id].CardId + " " + (TAG_ZONE)prevZone + " -> " +
-                //                 (TAG_ZONE)value);
 
                 if (((TAG_ZONE)value == TAG_ZONE.HAND || ((TAG_ZONE)value == TAG_ZONE.PLAY || (TAG_ZONE)value == TAG_ZONE.DECK) && game.IsMulliganDone) && gameState.WaitForController == null)
                 {
                     if (!game.IsMulliganDone)
-                        prevZone = (int)TAG_ZONE.DECK;
+                        prevValue = (int)TAG_ZONE.DECK;
                     if (controller == 0)
                     {
-                        game.Entities[id].SetTag(GAME_TAG.ZONE, prevZone);
+                        game.Entities[id].SetTag(GAME_TAG.ZONE, prevValue);
                         gameState.WaitForController = new { Tag = rawTag, Id = id, Value = rawValue };
-                        //Logger.WriteLine("CURRENTLY NO CONTROLLER SET FOR CARD, WAITING...");
                         return;
                     }
                 }
-                switch ((TAG_ZONE)prevZone)
+                switch ((TAG_ZONE)prevValue)
                 {
                     case TAG_ZONE.DECK:
                         switch ((TAG_ZONE)value)
@@ -161,7 +158,7 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                                 }
                                 break;
 							default:
-								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevZone, (TAG_ZONE)value), "TagChange");
+								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevValue, (TAG_ZONE)value), "TagChange");
 		                        break;
 
 
@@ -220,7 +217,7 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                                 }
                                 break;
 							default:
-								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevZone, (TAG_ZONE)value), "TagChange");
+								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevValue, (TAG_ZONE)value), "TagChange");
 								break;
 						}
                         break;
@@ -261,14 +258,14 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 	                                }
                                     else if(controller == game.Opponent.Id)
 									{
-										gameState.GameHandler.HandleOpponentPlayToGraveyard(game.Entities[id], cardId,
-																						   gameState.GetTurnNumber());
-										if(game.Entities[id].HasTag(GAME_TAG.HEALTH))
+                                        gameState.GameHandler.HandleOpponentPlayToGraveyard(game.Entities[id], cardId,
+                                                                                           gameState.GetTurnNumber(), gameState.PlayersTurn());
+                                        if (game.Entities[id].HasTag(GAME_TAG.HEALTH))
 											gameState.ProposeKeyPoint(KeyPointType.Death, id, ActivePlayer.Opponent);
                                     }
 		                        break;
 							default:
-								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevZone, (TAG_ZONE)value), "TagChange");
+								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevValue, (TAG_ZONE)value), "TagChange");
 								break;
 						}
                         break;
@@ -286,7 +283,7 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                                 }
                                 break;
 							default:
-								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevZone, (TAG_ZONE)value), "TagChange");
+								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevValue, (TAG_ZONE)value), "TagChange");
 								break;
 						}
                         break;
@@ -338,19 +335,19 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                                 }
                                 break;
 							default:
-								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevZone, (TAG_ZONE)value), "TagChange");
+								Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevValue, (TAG_ZONE)value), "TagChange");
 								break;
 						}
                         break;
 					default:
-						Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevZone, (TAG_ZONE)value), "TagChange");
+						Logger.WriteLine(string.Format("WARNING - unhandled zone change (id={0}): {1} -> {2}", id, (TAG_ZONE)prevValue, (TAG_ZONE)value), "TagChange");
 		                break;
                 }
             }
             else if (tag == GAME_TAG.PLAYSTATE)
             {
-                if (value == (int)TAG_PLAYSTATE.QUIT)
-                    gameState.GameHandler.HandleConcede();
+                if (value == (int)TAG_PLAYSTATE.CONCEDED)
+					gameState.GameHandler.HandleConcede();
                 if (!gameState.GameEnded)
                 {
                     if (game.Entities[id].IsPlayer)
@@ -378,6 +375,13 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                     }
                 }
             }
+            else if(tag == GAME_TAG.CARDTYPE && value == (int)TAG_CARDTYPE.HERO)
+            {
+                if(string.IsNullOrEmpty(game.Player.Class) && id == game.PlayerEntity.GetTag(GAME_TAG.HERO_ENTITY))
+                    gameState.GameHandler.SetPlayerHero(Database.GetHeroNameFromId(game.Entities[id].CardId));
+                else if(string.IsNullOrEmpty(game.Opponent.Class) && id == game.OpponentEntity.GetTag(GAME_TAG.HERO_ENTITY))
+                    gameState.GameHandler.SetOpponentHero(Database.GetHeroNameFromId(game.Entities[id].CardId));
+            }
             else if (tag == GAME_TAG.CURRENT_PLAYER && value == 1)
             {
                 var activePlayer = game.Entities[id].IsPlayer ? ActivePlayer.Player : ActivePlayer.Opponent;
@@ -386,6 +390,49 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                     gameState.PlayerUsedHeroPower = false;
                 else
                     gameState.OpponentUsedHeroPower = false;
+            }
+			else if(tag == GAME_TAG.LAST_CARD_PLAYED)
+			{
+				gameState.LastCardPlayed = value;
+			}
+            else if (tag == GAME_TAG.DEFENDING)
+            {
+                if (controller == game.Opponent.Id)
+                    gameState.GameHandler.HandleDefendingEntity(value == 1 ? game.Entities[id] : null);
+            }
+            else if (tag == GAME_TAG.ATTACKING)
+            {
+                if (controller == game.Player.Id)
+                    gameState.GameHandler.HandleAttackingEntity(value == 1 ? game.Entities[id] : null);
+            }
+            else if (tag == GAME_TAG.PROPOSED_DEFENDER)
+            {
+                game.OpponentSecrets.ProposedDefenderEntityId = value;
+            }
+            else if (tag == GAME_TAG.PROPOSED_ATTACKER)
+            {
+                game.OpponentSecrets.ProposedAttackerEntityId = value;
+            }
+            else if (tag == GAME_TAG.NUM_MINIONS_PLAYED_THIS_TURN && value > 0)
+            {
+                if (gameState.PlayersTurn())
+                {
+                    gameState.GameHandler.HandlePlayerMinionPlayed();
+                }
+            }
+            else if (tag == GAME_TAG.PREDAMAGE && value > 0)
+            {
+                if (gameState.PlayersTurn())
+                {
+                    gameState.GameHandler.HandleOpponentDamage(game.Entities[id]);
+                }
+            }
+            else if (tag == GAME_TAG.NUM_TURNS_IN_PLAY && value > 0)
+            {
+                if (!gameState.PlayersTurn())
+                {
+                    gameState.GameHandler.HandleOpponentTurnStart(game.Entities[id]);
+                }
             }
             else if (tag == GAME_TAG.NUM_ATTACKS_THIS_TURN && value > 0)
             {
@@ -448,22 +495,25 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
                         gameState.ProposeKeyPoint(KeyPointType.HeroPower, id, ActivePlayer.Opponent);
                 }
             }
-            else if (tag == GAME_TAG.CONTROLLER)
+            else if (tag == GAME_TAG.CONTROLLER && prevValue > 0)
             {
 	            if (value == game.Player.Id)
 	            {
 		            if (game.Entities[id].IsInZone(TAG_ZONE.SECRET))
-		            {
-			            gameState.GameHandler.HandleOpponentSecretTrigger(game.Entities[id], cardId, gameState.GetTurnNumber(), id);
-			            gameState.ProposeKeyPoint(KeyPointType.SecretStolen, id, ActivePlayer.Player);
+					{
+						gameState.GameHandler.HandleOpponentStolen(game.Entities[id], cardId, gameState.GetTurnNumber());
+						gameState.ProposeKeyPoint(KeyPointType.SecretStolen, id, ActivePlayer.Player);
 		            }
 		            else if (game.Entities[id].IsInZone(TAG_ZONE.PLAY))
 						gameState.GameHandler.HandleOpponentStolen(game.Entities[id], cardId, gameState.GetTurnNumber());
 				}
 	            else if (value == game.Opponent.Id)
 	            {
-		            if (game.Entities[id].IsInZone(TAG_ZONE.SECRET))
-			            gameState.ProposeKeyPoint(KeyPointType.SecretStolen, id, ActivePlayer.Player);
+		            if(game.Entities[id].IsInZone(TAG_ZONE.SECRET))
+					{
+						gameState.GameHandler.HandleOpponentStolen(game.Entities[id], cardId, gameState.GetTurnNumber());
+						gameState.ProposeKeyPoint(KeyPointType.SecretStolen, id, ActivePlayer.Player);
+		            }
 					else if (game.Entities[id].IsInZone(TAG_ZONE.PLAY))
 						gameState.GameHandler.HandlePlayerStolen(game.Entities[id], cardId, gameState.GetTurnNumber());
 	            }

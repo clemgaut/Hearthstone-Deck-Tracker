@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using Hearthstone_Deck_Tracker.Enums;
@@ -32,8 +33,27 @@ namespace Hearthstone_Deck_Tracker.Hearthstone.Entities
 		public string Name { get; set; }
 		public int Id { get; set; }
 		public string CardId { get; set; }
+
+		/// <Summary>
+		/// This is player entity, NOT the player hero.
+		/// </Summary>
 		public bool IsPlayer { get; set; }
 
+        [JsonIgnore]
+        public bool IsHero
+        {
+            get { return CardId != null && CardIds.HeroIdDict.Keys.Contains(CardId); }
+        }
+
+        [JsonIgnore]
+        public bool IsActiveDeathrattle
+        {
+            get { return HasTag(GAME_TAG.DEATHRATTLE) && GetTag(GAME_TAG.DEATHRATTLE) == 1; }
+        }
+
+		/// <Summary>
+		/// This is opponent entity, NOT the opponent hero.
+		/// </Summary>
 		[JsonIgnore]
 		public bool IsOpponent
 		{
@@ -78,7 +98,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone.Entities
 				return _cachedCard
 				       ?? (_cachedCard =
 				           (Database.GetCardFromId(CardId)
-				            ?? new Card(string.Empty, null, "unknown", "unknown", "unknown", 0, "unknown", 0, 1, "", "", 0, 0, "unknown", null, 0, "",
+				            ?? new Card(string.Empty, null, Rarity.Free, "unknown", "unknown", 0, "unknown", 0, 1, "", "", 0, 0, "unknown", null, 0, "",
 				                        "")));
 			}
 		}
@@ -154,6 +174,22 @@ namespace Hearthstone_Deck_Tracker.Hearthstone.Entities
 		public ImageBrush Background
 		{
 			get { return Card.Background; }
+		}
+
+		[JsonIgnore]
+		public FontFamily Font
+		{
+			get
+			{
+				var lang = Config.Instance.SelectedLanguage;
+				var font = new FontFamily();
+				// if the language uses a Latin script use Belwe font
+				if(Helper.LatinLanguages.Contains(lang))
+				{
+					font = new FontFamily(new Uri("pack://application:,,,/"), "./resources/#Belwe Bd BT");
+				}
+				return font;
+			}
 		}
 
 		[JsonIgnore]

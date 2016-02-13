@@ -2,11 +2,14 @@
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
+using Hearthstone_Deck_Tracker.Controls.Stats;
+using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.HearthStats.API;
 using Hearthstone_Deck_Tracker.LogReader;
 using Hearthstone_Deck_Tracker.Plugins;
 using Hearthstone_Deck_Tracker.Utility;
+using Hearthstone_Deck_Tracker.Utility.HotKeys;
 using Hearthstone_Deck_Tracker.Windows;
 using MahApps.Metro.Controls.Dialogs;
 using Application = System.Windows.Application;
@@ -18,9 +21,11 @@ namespace Hearthstone_Deck_Tracker
     {
         private static TrayIcon _trayIcon;
         private static OverlayWindow _overlay;
+	    private static Overview _statsOverview;
         public static Version Version { get; set; }
         public static GameV2 Game { get; set; }
         public static MainWindow MainWindow { get; set; }
+		public static Overview StatsOverview { get { return _statsOverview ?? (_statsOverview = new Overview()); } }
         public static bool Initialized { get; private set; }
 
         public static TrayIcon TrayIcon
@@ -40,32 +45,44 @@ namespace Hearthstone_Deck_Tracker
         public static void Initialize()
         {
             Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
+	        var newUser = !Directory.Exists(Config.AppDataPath);
             Config.Load();
             ConfigManager.Run();
-            Logger.Initialzie();
+            Logger.Initialize();
             Helper.UpdateAppTheme();
             var splashScreenWindow = new SplashScreenWindow();
-            splashScreenWindow.Show();
-            Game = new GameV2();
-            if (!HearthStatsAPI.LoadCredentials() && Config.Instance.ShowLoginDialog)
+            splashScreenWindow.ShowConditional();
+	        Game = new GameV2();
+	        LoginType loginType;
+	        var loggedIn = HearthStatsAPI.LoadCredentials();
+            if (!loggedIn && Config.Instance.ShowLoginDialog)
             {
                 var loginWindow = new LoginWindow();
                 splashScreenWindow.Close();
                 loginWindow.ShowDialog();
-                if (!loginWindow.LoginResult)
+                if (loginWindow.LoginResult == LoginType.None)
                 {
                     Application.Current.Shutdown();
                     return;
                 }
+	            loginType = loginWindow.LoginResult;
                 splashScreenWindow = new SplashScreenWindow();
-                splashScreenWindow.Show();
+                splashScreenWindow.ShowConditional();
             }
+            else
+	            loginType = loggedIn ? LoginType.AutoLogin : LoginType.AutoGuest;
             MainWindow = new MainWindow();
             MainWindow.LoadConfigSettings();
+            if(Config.Instance.ReselectLastDeckUsed)
+            {
+                MainWindow.SelectLastUsedDeck();
+                Config.Instance.ReselectLastDeckUsed = false;
+                Config.Save();
+            }
             MainWindow.Show();
             splashScreenWindow.Close();
 
-            if (ConfigManager.UpdatedVersion != null)
+			if (ConfigManager.UpdatedVersion != null)
             {
                 Updater.Cleanup();
                 MainWindow.FlyoutUpdateNotes.IsOpen = true;
@@ -105,8 +122,13 @@ namespace Hearthstone_Deck_Tracker
 
             UpdateOverlayAsync();
             NewsUpdater.UpdateAsync();
-            Initialized = true;
-        }
+			HotKeyManager.Load();
+			Initialized = true;
+
+	        Analytics.Analytics.TrackPageView(
+	                                          string.Format("/app/v{0}/{1}{2}", Helper.GetCurrentVersion().ToVersionString(),
+	                                                        loginType.ToString().ToLower(), newUser ? "/new" : ""), "");
+		}
 
         private static async void UpdateOverlayAsync()
         {
@@ -173,11 +195,7 @@ namespace Hearthstone_Deck_Tracker
                         Logger.WriteLine("Exited game", "UpdateOverlayLoop");
                         Game.CurrentRegion = Region.UNKNOWN;
                         Logger.WriteLine("Reset region", "UpdateOverlayLoop");
-                        //HsLogReaderV2.Instance.ClearLog();
-                        Game.Reset();
-                        if (DeckList.Instance.ActiveDeck != null)
-                            Game.SetPremadeDeck((Deck) DeckList.Instance.ActiveDeck.Clone());
-                        await LogReaderManager.Restart();
+                        await Reset();
 
                         MainWindow.BtnStartHearthstone.Visibility = Visibility.Visible;
                         TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Visible = true;
@@ -198,6 +216,22 @@ namespace Hearthstone_Deck_Tracker
             CanShutdown = true;
         }
 
+	    public static async Task Reset()
+		{
+			var stoppedReader = await LogReaderManager.Stop();
+			Game.Reset();
+			if(DeckList.Instance.ActiveDeck != null)
+			{
+				Game.SetPremadeDeck((Deck)DeckList.Instance.ActiveDeck.Clone());
+				MainWindow.UpdateMenuItemVisibility();
+			}
+			if(stoppedReader)
+				LogReaderManager.Restart();
+			Overlay.Update(false);
+			Overlay.UpdatePlayerCards();
+			Windows.PlayerWindow.UpdatePlayerCards();
+		}
+
 
         public static class Windows
         {
@@ -205,6 +239,7 @@ namespace Hearthstone_Deck_Tracker
             private static OpponentWindow _opponentWindow;
             private static TimerWindow _timerWindow;
             private static StatsWindow _statsWindow;
+	        private static StatsWindow_New _newStatsWindow;
 
             public static PlayerWindow PlayerWindow
             {
@@ -221,10 +256,14 @@ namespace Hearthstone_Deck_Tracker
                 get { return _timerWindow ?? (_timerWindow = new TimerWindow(Config.Instance)); }
             }
 
-            public static StatsWindow StatsWindow
-            {
-                get { return _statsWindow ?? (_statsWindow = new StatsWindow()); }
-            }
-        }
+			public static StatsWindow StatsWindow
+			{
+				get { return _statsWindow ?? (_statsWindow = new StatsWindow()); }
+			}
+			public static StatsWindow_New NewStatsWindow
+			{
+				get { return _newStatsWindow ?? (_newStatsWindow = new StatsWindow_New()); }
+			}
+		}
     }
 }

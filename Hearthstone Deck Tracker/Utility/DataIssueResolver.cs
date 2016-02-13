@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.HearthStats.Controls;
 using Hearthstone_Deck_Tracker.Replay;
 using Hearthstone_Deck_Tracker.Stats;
+using Hearthstone_Deck_Tracker.Windows;
 using MahApps.Metro.Controls.Dialogs;
+using CardIds = Hearthstone_Deck_Tracker.Hearthstone.CardIds;
 
 namespace Hearthstone_Deck_Tracker.Utility
 {
@@ -58,7 +60,7 @@ namespace Hearthstone_Deck_Tracker.Utility
                         Core.MainWindow.ShowMessageAsync("Detected " + numMatches + " duplicate matches.",
                                               "Due to sync issues some matches have been duplicated, click \"fix now\" to see and delete duplicates. Sorry about this.",
                                               MessageDialogStyle.AffirmativeAndNegativeAndSingleAuxiliary,
-                                              new MetroDialogSettings {
+                                              new MessageDialogs.Settings {
                                                   AffirmativeButtonText = "fix now",
                                                   NegativeButtonText = "fix later",
                                                   FirstAuxiliaryButtonText = "don't fix"
@@ -175,30 +177,8 @@ namespace Hearthstone_Deck_Tracker.Utility
                 Core.MainWindow.ShowProgressAsync("Fixing opponent names in recorded games...",
                                        "v0.10.0 caused opponent names to be set to their hero, rather than the actual name.\n\nThis may take a moment.\n\nYou can cancel to continue this at a later time (or not at all).",
                                        true);
-            var count = 0;
-            var lockMe = new object();
-            await Task.Run(() =>
-            {
-                Parallel.ForEach(games, (game, loopState) =>
-                {
-                    if(controller.IsCanceled)
-                        loopState.Stop();
-                    List<ReplayKeyPoint> replay = ReplayReader.LoadReplay(game.ReplayFile);
-                    if(replay == null)
-                        return;
-                    var last = replay.LastOrDefault();
-                    if(last == null)
-                        return;
-                    var opponent = last.Data.FirstOrDefault(x => x.IsOpponent);
-                    if(opponent == null)
-                        return;
-                    game.OpponentName = opponent.Name;
-                    lock (lockMe)
-                    {
-                        controller.SetProgress(1.0 * ++count / games.Count);
-                    }
-                });
-            });
+
+            await FixOppNameAndClass(games, controller);
 
             await controller.CloseAsync();
             if(controller.IsCanceled)
@@ -206,7 +186,7 @@ namespace Hearthstone_Deck_Tracker.Utility
                 var fix =
                     await
                     Core.MainWindow.ShowMessageAsync("Cancelled", "Fix remaining names on next start?", MessageDialogStyle.AffirmativeAndNegative,
-                                          new MetroDialogSettings { AffirmativeButtonText = "next time", NegativeButtonText = "don\'t fix" });
+                                          new MessageDialogs.Settings { AffirmativeButtonText = "next time", NegativeButtonText = "don\'t fix" });
                 if(fix == MessageDialogResult.Negative)
                 {
                     Config.Instance.ResolvedOpponentNames = true;
@@ -221,5 +201,63 @@ namespace Hearthstone_Deck_Tracker.Utility
             DeckStatsList.Save();
         }
 
-    }
+		internal static async Task<int> FixOppNameAndClass(List<GameStats> games, ProgressDialogController controller)
+		{
+			var count = 0;
+			var fixCount = 0;
+			var gamesCount = games.Count;
+			var lockMe = new object();
+			var options = new ParallelOptions {MaxDegreeOfParallelism = Environment.ProcessorCount};
+			await Task.Run(() =>
+			{
+				Parallel.ForEach(games, options, (game, loopState) =>
+				{
+					if(controller.IsCanceled)
+					{
+						loopState.Stop();
+						return;
+					}
+					List<ReplayKeyPoint> replay;
+                    try
+					{
+						replay = ReplayReader.LoadReplay(game.ReplayFile);
+					}
+					catch
+					{
+						return;
+					}
+					var last = replay.LastOrDefault();
+					if(last == null)
+						return;
+					var opponent = last.Data.FirstOrDefault(x => x.IsOpponent);
+					if(opponent == null)
+						return;
+					var incremented = false;
+					if(game.OpponentName != opponent.Name)
+					{
+						game.OpponentName = opponent.Name;
+						Interlocked.Increment(ref fixCount);
+						incremented = true;
+					}
+					var heroEntityId = opponent.GetTag(GAME_TAG.HERO_ENTITY);
+					var entity = last.Data.FirstOrDefault(x => x.Id == heroEntityId);
+					if(entity != null)
+					{
+						string hero;
+						if(CardIds.HeroIdDict.TryGetValue(entity.CardId, out hero) && game.OpponentHero != hero)
+						{
+							game.OpponentHero = hero;
+							if(!incremented)
+								Interlocked.Increment(ref fixCount);
+						}
+					}
+					lock (lockMe)
+					{
+						controller.SetProgress(1.0 * ++count / gamesCount);
+					}
+				});
+			});
+		    return fixCount;
+		}
+	}
 }
