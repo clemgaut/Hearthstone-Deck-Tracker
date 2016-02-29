@@ -373,21 +373,32 @@ namespace Hearthstone_Deck_Tracker
             {
                 if (selected.HasReplayFile && !Keyboard.IsKeyDown(Key.LeftCtrl))
                 {
-                    var replay = ReplayReader.LoadReplay(selected.ReplayFile);
-
-                    var playedCardsNames = GetPlayedCards(replay);
-
-                    using (StreamWriter outputFile = new StreamWriter(Path.Combine(dirName, Path.ChangeExtension(selected.ReplayFile, ".simpleLog"))))
-                    {
-                        foreach (string cardName in playedCardsNames)
-                            outputFile.WriteLine(cardName);
-                    }
+                    saveReplaySimpleLog(selected.ReplayFile, dirName);
                 }
             }
         }
 
+        public static void saveReplaySimpleLog(string filename, string dirName)
+        {
+            List<ReplayKeyPoint> replay;
+
+            // If we have a backslash, then we assume this is from an absolute path
+            if(!filename.Contains("\\"))
+                replay = ReplayReader.LoadReplay(filename);
+            else
+                replay = ReplayReader.LoadExternalReplay(filename);
+
+            var playedCardsNames = GetPlayedCards(replay);
+
+            using (StreamWriter outputFile = new StreamWriter(Path.Combine(dirName, Path.GetFileName(Path.ChangeExtension(filename, ".simpleLog")))))
+            {
+                foreach (string cardName in playedCardsNames)
+                    outputFile.WriteLine(cardName);
+            }
+        }
+
         // Returns all played cards (hero power and result included)
-        public List<string> GetPlayedCards(List<ReplayKeyPoint> replay)
+        public static List<string> GetPlayedCards(List<ReplayKeyPoint> replay)
         {
             List<string> playedCards = new List<string>();
             if (replay == null || replay.Count == 0)

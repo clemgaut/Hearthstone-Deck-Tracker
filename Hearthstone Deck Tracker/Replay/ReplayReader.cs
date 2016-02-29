@@ -39,7 +39,23 @@ namespace Hearthstone_Deck_Tracker.Replay
 			return (List<ReplayKeyPoint>)JsonConvert.DeserializeObject(json, typeof(List<ReplayKeyPoint>));
 		}
 
-		public static void CloseViewers()
+        public static List<ReplayKeyPoint> LoadExternalReplay(string fileName)
+        {
+            var path = fileName;
+            if (!File.Exists(path))
+                return new List<ReplayKeyPoint>();
+            const string jsonFile = "replay.json";
+            string json;
+
+            using (var fs = new FileStream(path, FileMode.Open))
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Read))
+            using (var sr = new StreamReader(archive.GetEntry(jsonFile).Open()))
+                json = sr.ReadToEnd();
+
+            return (List<ReplayKeyPoint>)JsonConvert.DeserializeObject(json, typeof(List<ReplayKeyPoint>));
+        }
+
+        public static void CloseViewers()
 		{
 			foreach(var viewer in Viewers.Where(viewer => viewer != null))
 				viewer.Close();

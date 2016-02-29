@@ -156,9 +156,23 @@ namespace Hearthstone_Deck_Tracker.Windows
 			}
 		}
 
+        /*
+        **  Modified function, loads replays from a directory and export logs
+        */
 		private void MenuItemReplayFromFile_OnClick(object sender, RoutedEventArgs e)
 		{
-			try
+            string inputDir = Helper.ShowDirectoryDialog("");
+            string[] filePaths = Directory.GetFiles(inputDir, "*.hdtreplay");
+
+            string outputDir = Helper.ShowDirectoryDialog("");
+
+
+            foreach (string fname in filePaths)
+            {
+                DeckStatsControl.saveReplaySimpleLog(fname, outputDir);
+            }
+            // Old function
+            /*try
 			{
 				var dialog = new OpenFileDialog
 				{
@@ -174,10 +188,10 @@ namespace Hearthstone_Deck_Tracker.Windows
 			catch(Exception ex)
 			{
 				Log.Error(ex);
-			}
-		}
+			}*/
+        }
 
-		private void MenuItemReplaySelectGame_OnClick(object sender, RoutedEventArgs e)
+        private void MenuItemReplaySelectGame_OnClick(object sender, RoutedEventArgs e)
 		{
 			if(Config.Instance.StatsInWindow)
 			{
