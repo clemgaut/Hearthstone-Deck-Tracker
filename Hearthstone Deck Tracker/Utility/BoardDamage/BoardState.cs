@@ -1,17 +1,16 @@
-﻿using System.Collections.Generic;
+﻿#region
+
+using System.Collections.Generic;
 using System.Linq;
-using Hearthstone_Deck_Tracker.Enums;
-using Hearthstone_Deck_Tracker.Enums.Hearthstone;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Hearthstone.Entities;
+
+#endregion
 
 namespace Hearthstone_Deck_Tracker.Utility.BoardDamage
 {
 	public class BoardState
 	{
-		public PlayerBoard Player { get; private set; }
-		public PlayerBoard Opponent { get; private set; }
-
 		public BoardState()
 		{
 			Player = CreatePlayerBoard();
@@ -24,29 +23,16 @@ namespace Hearthstone_Deck_Tracker.Utility.BoardDamage
 			Opponent = CreateBoard(opponent, entities, false, playerId);
 		}
 
-		public bool IsPlayerDeadToBoard()
-		{
-			if(Player.Hero == null)
-				return true;
-			return Opponent.Damage >= Player.Hero.Health;
-		}
+		public PlayerBoard Player { get; }
+		public PlayerBoard Opponent { get; }
 
-		public bool IsOpponentDeadToBoard()
-		{
-			if(Opponent.Hero == null)
-				return true;
-			return Player.Damage >= Opponent.Hero.Health;
-		}
+		public bool IsPlayerDeadToBoard() => Player.Hero == null || Opponent.Damage >= Player.Hero.Health;
 
-		private PlayerBoard CreatePlayerBoard()
-		{
-			return CreateBoard(new List<CardEntity>(Core.Game.Player.Board), Core.Game.Entities, true, Core.Game.Player.Id);
-		}
+		public bool IsOpponentDeadToBoard() => Opponent.Hero == null || Player.Damage >= Opponent.Hero.Health;
 
-		private PlayerBoard CreateOpponentBoard()
-		{
-			return CreateBoard(new List<CardEntity>(Core.Game.Opponent.Board), Core.Game.Entities, false, Core.Game.Player.Id);
-		}
+		private PlayerBoard CreatePlayerBoard() => CreateBoard(new List<CardEntity>(Core.Game.Player.Board), Core.Game.Entities, true, Core.Game.Player.Id);
+
+		private PlayerBoard CreateOpponentBoard() => CreateBoard(new List<CardEntity>(Core.Game.Opponent.Board), Core.Game.Entities, false, Core.Game.Player.Id);
 
 		private PlayerBoard CreateBoard(List<CardEntity> list, Dictionary<int, Entity> entities, bool isPlayer, int playerId)
 		{
@@ -56,11 +42,11 @@ namespace Hearthstone_Deck_Tracker.Utility.BoardDamage
 			if(!heroFound)
 			{
 				var hero = EntityHelper.GetHeroEntity(isPlayer, entities, playerId);
-				if (hero != null)
+				if(hero != null)
 					list.Add(new CardEntity(hero));
 			}
 
 			return new PlayerBoard(list, activeTurn);
-		}		
+		}
 	}
 }

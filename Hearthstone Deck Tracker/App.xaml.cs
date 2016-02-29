@@ -10,7 +10,8 @@ using System.Windows;
 using System.Windows.Threading;
 using Garlic;
 using Hearthstone_Deck_Tracker.Controls.Error;
-using Hearthstone_Deck_Tracker.Utility;
+using Hearthstone_Deck_Tracker.Plugins;
+using Hearthstone_Deck_Tracker.Utility.Extensions;
 
 #endregion
 
@@ -27,12 +28,12 @@ namespace Hearthstone_Deck_Tracker
 		{
 			if(e.Exception is MissingMethodException || e.Exception is TypeLoadException)
 			{
-				var plugin = Plugins.PluginManager.Instance.Plugins.FirstOrDefault(p => new FileInfo(p.FileName).Name.Replace(".dll", "") == e.Exception.Source);
+				var plugin =
+					PluginManager.Instance.Plugins.FirstOrDefault(p => new FileInfo(p.FileName).Name.Replace(".dll", "") == e.Exception.Source);
 				if(plugin != null)
 				{
 					plugin.IsEnabled = false;
-					var header = string.Format("{0} is not compatible with HDT {1}.", plugin.NameAndVersion,
-					                           Helper.GetCurrentVersion().ToVersionString());
+					var header = $"{plugin.NameAndVersion} is not compatible with HDT {Helper.GetCurrentVersion().ToVersionString()}.";
 					ErrorManager.AddError(header, "Make sure you are using the latest version of the Plugin and HDT.\n\n" + e.Exception);
 					e.Handled = true;
 					return;
@@ -40,11 +41,12 @@ namespace Hearthstone_Deck_Tracker
 			}
 
 			var stackTrace = e.Exception.StackTrace.Split(new[] {Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries);
-			Analytics.Analytics.TrackEvent(e.Exception.GetType().ToString().Split('.').Last(), stackTrace.Length > 0 ? stackTrace[0] : "", stackTrace.Length > 1 ? stackTrace[1] : "");
+			Analytics.Analytics.TrackEvent(e.Exception.GetType().ToString().Split('.').Last(), stackTrace.Length > 0 ? stackTrace[0] : "",
+			                               stackTrace.Length > 1 ? stackTrace[1] : "");
 #if (!DEBUG)
 			var date = DateTime.Now;
 			var fileName = "Crash Reports\\"
-			               + string.Format("Crash report {0}{1}{2}-{3}{4}", date.Day, date.Month, date.Year, date.Hour, date.Minute);
+			               + $"Crash report {date.Day}{date.Month}{date.Year}-{date.Hour}{date.Minute}";
 
 			if(!Directory.Exists("Crash Reports"))
 				Directory.CreateDirectory("Crash Reports");
@@ -65,10 +67,10 @@ namespace Hearthstone_Deck_Tracker
 #endif
 		}
 
-	    private void App_OnStartup(object sender, StartupEventArgs e)
-        {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            Core.Initialize();
-        }
+		private void App_OnStartup(object sender, StartupEventArgs e)
+		{
+			ShutdownMode = ShutdownMode.OnExplicitShutdown;
+			Core.Initialize();
+		}
 	}
 }

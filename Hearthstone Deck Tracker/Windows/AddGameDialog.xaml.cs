@@ -9,6 +9,7 @@ using System.Windows.Input;
 using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Stats;
+using Hearthstone_Deck_Tracker.Utility.Logging;
 using MahApps.Metro.Controls.Dialogs;
 
 #endregion
@@ -123,15 +124,12 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls
 			}
 			catch(Exception ex)
 			{
-				Logger.WriteLine(ex.ToString(), "AddGameDialog");
+				Log.Error(ex);
 				_tcs.SetResult(null);
 			}
 		}
 
-		internal Task<GameStats> WaitForButtonPressAsync()
-		{
-			return _tcs.Task;
-		}
+		internal Task<GameStats> WaitForButtonPressAsync() => _tcs.Task;
 
 		private void TextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
 		{
@@ -145,9 +143,6 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls
 				TextBoxRank.IsEnabled = e.AddedItems.Contains(GameMode.Ranked);
 		}
 
-		private void BtnCancel_OnClick(object sender, RoutedEventArgs e)
-		{
-			_tcs.SetResult(null);
-		}
+		private void BtnCancel_OnClick(object sender, RoutedEventArgs e) => _tcs.SetResult(null);
 	}
 }

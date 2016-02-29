@@ -10,17 +10,20 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Hearthstone_Deck_Tracker.Enums;
-using Hearthstone_Deck_Tracker.FlyoutControls;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.HearthStats.API;
 using Hearthstone_Deck_Tracker.Replay;
 using Hearthstone_Deck_Tracker.Stats;
 using Hearthstone_Deck_Tracker.Utility;
+using Hearthstone_Deck_Tracker.Utility.Extensions;
+using Hearthstone_Deck_Tracker.Utility.Logging;
 using Hearthstone_Deck_Tracker.Windows;
 using MahApps.Metro.Controls;
 using MahApps.Metro.Controls.Dialogs;
-using Hearthstone_Deck_Tracker.Enums.Hearthstone;
+using static System.Windows.Visibility;
+using static Hearthstone_Deck_Tracker.Enums.TimeFrame;
 using System.IO;
+using Hearthstone_Deck_Tracker.Enums.Hearthstone;
 
 #endregion
 
@@ -31,7 +34,6 @@ namespace Hearthstone_Deck_Tracker
 	/// </summary>
 	public partial class DeckStatsControl
 	{
-	    private GameV2 _game;
 	    private const string BtnOpponentDeckTextShow = "Show Opp. Deck";
 		private const string BtnOpponentDeckTextHide = "Hide Opp. Deck";
 		private const int GroupBoxHeaderHeight = 28;
@@ -42,7 +44,6 @@ namespace Hearthstone_Deck_Tracker
 
 		public DeckStatsControl()
 		{
-		    
 		    InitializeComponent();
 			ComboboxGameMode.ItemsSource = Enum.GetValues(typeof(GameMode));
 			ComboboxTime.ItemsSource = Enum.GetValues(typeof(TimeFrame));
@@ -53,14 +54,10 @@ namespace Hearthstone_Deck_Tracker
 			_isGroupBoxExpanded = new Dictionary<GroupBox, bool> {{GroupboxClassOverview, true}};
 		}
 
-		public Visibility OnlyOverallVisible
-		{
-			get { return TabControlCurrentOverall.SelectedIndex == 0 ? Visibility.Collapsed : Visibility.Visible; }
-		}
+		public Visibility OnlyOverallVisible => TabControlCurrentOverall.SelectedIndex == 0 ? Collapsed : Visible;
 
-		public void LoadConfig(GameV2 game)
+		public void LoadConfig()
 		{
-            _game = game;
             ComboboxGameMode.SelectedItem = Config.Instance.SelectedStatsFilterGameMode;
 			ComboboxTime.SelectedValue = Config.Instance.SelectedStatsFilterTimeFrame;
 			ComboboxUnassigned.SelectedValue = Config.Instance.StatsOverallFilterDeckMode;
@@ -94,11 +91,7 @@ namespace Hearthstone_Deck_Tracker
 
 		private async void DeleteGames(DataGrid dataGrid, bool overall)
 		{
-			MetroWindow window;
-			if(Config.Instance.StatsInWindow)
-				window = Core.Windows.StatsWindow;
-			else
-				window = Helper.MainWindow;
+			var window = Config.Instance.StatsInWindow ? (MetroWindow)Core.Windows.StatsWindow : Core.MainWindow;
 
 			var count = dataGrid.SelectedItems.Count;
 			if(count == 1)
@@ -115,7 +108,7 @@ namespace Hearthstone_Deck_Tracker
 					{
 						selectedGame.DeleteGameFile();
 						_deck.DeckStats.Games.Remove(selectedGame);
-						Logger.WriteLine("Deleted game " + selectedGame + "(overall=" + overall + ")", "DeckStatsControl");
+						Log.Info($"Deleted game {selectedGame} (overall=false)");
 						DeckStatsList.Save();
 					}
 				}
@@ -128,7 +121,7 @@ namespace Hearthstone_Deck_Tracker
 						{
 							selectedGame.DeleteGameFile();
 							deck.DeckStats.Games.Remove(selectedGame);
-							Logger.WriteLine("Deleted game " + selectedGame + "(overall=" + overall + ")", "DeckStatsControl");
+							Log.Info($"Deleted game {selectedGame} (overall=true)");
 							DefaultDeckStats.Save();
 						}
 					}
@@ -139,13 +132,13 @@ namespace Hearthstone_Deck_Tracker
 						{
 							selectedGame.DeleteGameFile();
 							deckstats.Games.Remove(selectedGame);
-							Logger.WriteLine("Deleted game " + selectedGame + "(overall=" + overall + ")", "DeckStatsControl");
+							Log.Info($"Deleted game {selectedGame} (overall=true)");
 							DefaultDeckStats.Save();
 						}
 					}
 				}
 				if(HearthStatsAPI.IsLoggedIn && selectedGame.HasHearthStatsId && await Core.MainWindow.ShowCheckHearthStatsMatchDeletionDialog())
-					HearthStatsManager.DeleteMatchesAsync(new List<GameStats> {selectedGame});
+					HearthStatsManager.DeleteMatchesAsync(new List<GameStats> {selectedGame}).Forget();
 				//Core.MainWindow.DeckPickerList.Items.Refresh();
 				Core.MainWindow.DeckPickerList.UpdateDecks();
 				Refresh();
@@ -163,7 +156,7 @@ namespace Hearthstone_Deck_Tracker
 						{
 							selectedGame.DeleteGameFile();
 							_deck.DeckStats.Games.Remove(selectedGame);
-							Logger.WriteLine("Deleted game " + selectedGame + "(overall=" + overall + ")", "DeckStatsControl");
+							Log.Info($"Deleted game {selectedGame} (overall=false)");
 						}
 					}
 					else
@@ -175,7 +168,7 @@ namespace Hearthstone_Deck_Tracker
 							{
 								selectedGame.DeleteGameFile();
 								deck.DeckStats.Games.Remove(selectedGame);
-								Logger.WriteLine("Deleted game " + selectedGame + "(overall=" + overall + ")", "DeckStatsControl");
+								Log.Info($"Deleted game {selectedGame} (overall=true)");
 							}
 						}
 						else
@@ -185,7 +178,7 @@ namespace Hearthstone_Deck_Tracker
 							{
 								selectedGame.DeleteGameFile();
 								deckstats.Games.Remove(selectedGame);
-								Logger.WriteLine("Deleted game " + selectedGame + "(overall=" + overall + ")", "DeckStatsControl");
+								Log.Info($"Deleted game {selectedGame} (overall=true)");
 							}
 						}
 					}
@@ -193,10 +186,10 @@ namespace Hearthstone_Deck_Tracker
 
 				if(HearthStatsAPI.IsLoggedIn && selectedGames.Any(g => g.HasHearthStatsId)
 				   && await Core.MainWindow.ShowCheckHearthStatsMatchDeletionDialog())
-					HearthStatsManager.DeleteMatchesAsync(selectedGames);
+					HearthStatsManager.DeleteMatchesAsync(selectedGames).Forget();
 				DeckStatsList.Save();
 				DefaultDeckStats.Save();
-				Logger.WriteLine("Deleted " + count + " games", "DeckStatsControl");
+				Log.Info("Deleted " + count + " games");
 				Core.MainWindow.DeckPickerList.UpdateDecks();
 				Refresh();
 			}
@@ -208,14 +201,14 @@ namespace Hearthstone_Deck_Tracker
 			if(deck == null)
 			{
 				TabControlCurrentOverall.SelectedIndex = 1;
-				TabItemDeck.Visibility = Visibility.Collapsed;
-				TabItemOverall.Visibility = Visibility.Collapsed;
-				StackPanelUnassignedFilter.Visibility = Visibility.Visible;
+				TabItemDeck.Visibility = Collapsed;
+				TabItemOverall.Visibility = Collapsed;
+				StackPanelUnassignedFilter.Visibility = Visible;
 				return;
 			}
-			TabItemDeck.Visibility = Visibility.Visible;
-			TabItemOverall.Visibility = Visibility.Visible;
-			StackPanelUnassignedFilter.Visibility = TabControlCurrentOverall.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+			TabItemDeck.Visibility = Visible;
+			TabItemOverall.Visibility = Visible;
+			StackPanelUnassignedFilter.Visibility = TabControlCurrentOverall.SelectedIndex == 1 ? Visible : Collapsed;
 			DataGridGames.Items.Clear();
 			var filteredGames = FilterGames(deck.DeckStats.Games).ToList();
 			var modified = false;
@@ -269,43 +262,43 @@ namespace Hearthstone_Deck_Tracker
 
 			switch(comboboxString)
 			{
-				case TimeFrame.Today:
+				case Today:
 					endTime = DateTime.Now;
 					break;
-				case TimeFrame.Yesterday:
+				case Yesterday:
 					startTime -= new TimeSpan(1, 0, 0, 0);
 					endTime -= new TimeSpan(1, 0, 0, 0);
 					break;
-				case TimeFrame.Last24Hours:
+				case Last24Hours:
 					startTime = DateTime.Now - new TimeSpan(1, 0, 0, 0);
 					endTime = DateTime.Now;
 					break;
-				case TimeFrame.ThisWeek:
+				case ThisWeek:
 					startTime -= new TimeSpan(((int)(startTime.DayOfWeek) - 1), 0, 0, 0);
 					break;
-				case TimeFrame.PreviousWeek:
+				case PreviousWeek:
 					startTime -= new TimeSpan(7 + ((int)(startTime.DayOfWeek) - 1), 0, 0, 0);
 					endTime -= new TimeSpan(((int)(endTime.DayOfWeek)), 0, 0, 0);
 					break;
-				case TimeFrame.Last7Days:
+				case Last7Days:
 					startTime -= new TimeSpan(7, 0, 0, 0);
 					break;
-				case TimeFrame.ThisMonth:
+				case ThisMonth:
 					startTime -= new TimeSpan(startTime.Day - 1, 0, 0, 0);
 					break;
-				case TimeFrame.PreviousMonth:
+				case PreviousMonth:
 					startTime -= new TimeSpan(startTime.Day - 1 + DateTime.DaysInMonth(startTime.AddMonths(-1).Year, startTime.AddMonths(-1).Month), 0,
 					                          0, 0);
 					endTime -= new TimeSpan(endTime.Day, 0, 0, 0);
 					break;
-				case TimeFrame.ThisYear:
+				case ThisYear:
 					startTime -= new TimeSpan(startTime.DayOfYear - 1, 0, 0, 0);
 					break;
-				case TimeFrame.PreviousYear:
+				case PreviousYear:
 					startTime -= new TimeSpan(startTime.DayOfYear - 1 + (DateTime.IsLeapYear(startTime.Year) ? 366 : 365), 0, 0, 0);
 					endTime -= new TimeSpan(startTime.DayOfYear, 0, 0, 0);
 					break;
-				case TimeFrame.AllTime:
+				case AllTime:
 					startTime = new DateTime();
 					break;
 			}
@@ -334,10 +327,7 @@ namespace Hearthstone_Deck_Tracker
 				DataGridGames.SelectedItem = oldSelectionCurrent;
 		}
 
-		private void BtnDetails_Click(object sender, RoutedEventArgs e)
-		{
-			OpenGameDetails(DataGridGames.SelectedItem as GameStats);
-		}
+		private void BtnDetails_Click(object sender, RoutedEventArgs e) => OpenGameDetails(DataGridGames.SelectedItem as GameStats);
 
         private void BtnExtractPlays_Click(object sender, RoutedEventArgs e)
         {
@@ -407,7 +397,7 @@ namespace Hearthstone_Deck_Tracker
 
             if (currentGameState == null)
             {
-                Logger.WriteLine("Error loading replay. No player entity found.");
+                Log.WriteLine("Error loading replay. No player entity found.", LogType.Error);
                 return playedCards;
             }
 
@@ -497,8 +487,8 @@ namespace Hearthstone_Deck_Tracker
 
 		private void OpenGameDetails(GameStats selected)
 		{
-			if(selected != null)
-			{
+			if(selected == null)
+				return;
 				if(selected.HasReplayFile && !Keyboard.IsKeyDown(Key.LeftCtrl)) //hold ctrl to open old game viewer
 					ReplayReader.LaunchReplayViewer(selected.ReplayFile);
 				else if(Config.Instance.StatsInWindow)
@@ -514,27 +504,14 @@ namespace Hearthstone_Deck_Tracker
 					Core.MainWindow.FlyoutGameDetails.IsOpen = true;
 				}
 			}
-		}
 
-		private void BtnOverallMoveToOtherDeck_Click(object sender, RoutedEventArgs e)
-		{
-			MoveGameToOtherDeck(DataGridOverallGames.SelectedItems.Cast<GameStats>().ToList());
-		}
+		private void BtnOverallMoveToOtherDeck_Click(object sender, RoutedEventArgs e) => MoveGameToOtherDeck(DataGridOverallGames.SelectedItems.Cast<GameStats>().ToList());
 
-		private void BtnOverallDetails_Click(object sender, RoutedEventArgs e)
-		{
-			OpenGameDetails(DataGridOverallGames.SelectedItem as GameStats);
-		}
+		private void BtnOverallDetails_Click(object sender, RoutedEventArgs e) => OpenGameDetails(DataGridOverallGames.SelectedItem as GameStats);
 
-		private void BtnOverallEditNote_Click(object sender, RoutedEventArgs e)
-		{
-			EditNote(DataGridOverallGames.SelectedItem as GameStats);
-		}
+		private void BtnOverallEditNote_Click(object sender, RoutedEventArgs e) => EditNote(DataGridOverallGames.SelectedItem as GameStats);
 
-		private void BtnOverallDelete_Click(object sender, RoutedEventArgs e)
-		{
-			DeleteGames(DataGridOverallGames, true);
-		}
+		private void BtnOverallDelete_Click(object sender, RoutedEventArgs e) => DeleteGames(DataGridOverallGames, true);
 
 		private void DGridOverall_MouseDoubleClick(object sender, MouseButtonEventArgs e)
 		{
@@ -550,30 +527,30 @@ namespace Hearthstone_Deck_Tracker
 			OpenGameDetails(DataGridOverallGames.SelectedItem as GameStats);
 		}
 
-		private void DGridOverall_SelectionChanged(object sender, SelectionChangedEventArgs e)
-		{
-			var enabled = DataGridOverallGames.SelectedItems.Count > 0;
-			BtnOverallDelete.IsEnabled = enabled;
-			BtnOverallDetails.IsEnabled = enabled;
-			BtnOverallNote.IsEnabled = enabled;
-			BtnOverallShowOpponentDeck.IsEnabled = enabled;
-			BtnOverallMoveToOtherDeck.IsEnabled = enabled;
-			BtnOverallEditGame.IsEnabled = enabled;
+        private void DGridOverall_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var enabled = DataGridOverallGames.SelectedItems.Count > 0;
+            BtnOverallDelete.IsEnabled = enabled;
+            BtnOverallDetails.IsEnabled = enabled;
+            BtnOverallNote.IsEnabled = enabled;
+            BtnOverallShowOpponentDeck.IsEnabled = enabled;
+            BtnOverallMoveToOtherDeck.IsEnabled = enabled;
+            BtnOverallEditGame.IsEnabled = enabled;
             BtnOverallExtractPlays.IsEnabled = enabled;
             BtnOverallExtractAllPlays.IsEnabled = enabled;
-			if(DataGridOverallGames.SelectedItems.Count > 0)
-			{
-				var selectedGames = DataGridOverallGames.SelectedItems.Cast<GameStats>().ToList();
-				var allTheSameHero = selectedGames.All(g => g.PlayerHero == selectedGames[0].PlayerHero);
-				BtnOverallMoveToOtherDeck.IsEnabled = allTheSameHero;
-				if(Core.MainWindow.FlyoutDeck.IsOpen)
-				{
-					var game = DataGridOverallGames.SelectedItem as GameStats;
-					if(game != null)
-						ImportOpponentDeck(game);
-				}
-			}
-		}
+            if (DataGridOverallGames.SelectedItems.Count > 0)
+            {
+                var selectedGames = DataGridOverallGames.SelectedItems.Cast<GameStats>().ToList();
+                var allTheSameHero = selectedGames.All(g => g.PlayerHero == selectedGames[0].PlayerHero);
+                BtnOverallMoveToOtherDeck.IsEnabled = allTheSameHero;
+                if (Core.MainWindow.FlyoutDeck.IsOpen)
+                {
+                    var game = DataGridOverallGames.SelectedItem as GameStats;
+                    if (game != null)
+                        ImportOpponentDeck(game);
+                }
+            }
+        }
 
 		private void ComboboxGameMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
@@ -636,21 +613,19 @@ namespace Hearthstone_Deck_Tracker
 
 		private void GroupBoxDeckOverview_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 		{
-			if(e.GetPosition(GroupboxDeckOverview).Y < GroupBoxHeaderHeight)
-			{
+			if(!(e.GetPosition(GroupboxDeckOverview).Y < GroupBoxHeaderHeight))
+				return;
 				Config.Instance.StatsDeckOverviewIsExpanded = ExpandCollapseGroupBox(GroupboxDeckOverview);
 				Config.Save();
 			}
-		}
 
 		private void GroupboxClassOverview_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 		{
-			if(e.GetPosition(GroupboxClassOverview).Y < GroupBoxHeaderHeight)
-			{
+			if(!(e.GetPosition(GroupboxClassOverview).Y < GroupBoxHeaderHeight))
+				return;
 				Config.Instance.StatsClassOverviewIsExpanded = ExpandCollapseGroupBox(GroupboxClassOverview);
 				Config.Save();
 			}
-		}
 
 		private bool ExpandCollapseGroupBox(GroupBox groupBox, bool? expand = null)
 		{
@@ -663,15 +638,9 @@ namespace Hearthstone_Deck_Tracker
 			return _isGroupBoxExpanded[groupBox];
 		}
 
-		private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
-		{
-			Refresh();
-		}
+		private void TextBox_TextChanged(object sender, TextChangedEventArgs e) => Refresh();
 
-		private void BtnMoveToOtherDeck_Click(object sender, RoutedEventArgs e)
-		{
-			MoveGameToOtherDeck(DataGridGames.SelectedItems.Cast<GameStats>().ToList());
-		}
+		private void BtnMoveToOtherDeck_Click(object sender, RoutedEventArgs e) => MoveGameToOtherDeck(DataGridGames.SelectedItems.Cast<GameStats>().ToList());
 
 		private void MoveGameToOtherDeck(List<GameStats> selectedGames)
 		{
@@ -693,7 +662,7 @@ namespace Hearthstone_Deck_Tracker
 			if(Config.Instance.StatsInWindow)
 				dialog.Owner = Core.Windows.StatsWindow;
 			else
-				dialog.Owner = Helper.MainWindow;
+				dialog.Owner = Core.MainWindow;
 
 			dialog.ShowDialog();
 			var selectedDeck = dialog.SelectedDeck;
@@ -711,8 +680,7 @@ namespace Hearthstone_Deck_Tracker
 				else
 				{
 					var deck = DeckList.Instance.Decks.FirstOrDefault(d => game.DeckId == d.DeckId);
-					if(deck != null)
-						deck.DeckStats.Games.Remove(game);
+					deck?.DeckStats.Games.Remove(game);
 				}
                 game.PlayerDeckVersion = dialog.SelectedVersion;
                 game.HearthStatsDeckVersionId = selectedDeck.GetVersion(dialog.SelectedVersion).HearthStatsDeckVersionId;
@@ -720,7 +688,7 @@ namespace Hearthstone_Deck_Tracker
                 game.DeckName = selectedDeck.Name;
 				selectedDeck.DeckStats.Games.Add(game);
 				if(HearthStatsAPI.IsLoggedIn && Config.Instance.HearthStatsAutoUploadNewGames)
-					HearthStatsManager.MoveMatchAsync(game, selectedDeck, background: true);
+					HearthStatsManager.MoveMatchAsync(game, selectedDeck, background: true).Forget();
 			}
 			DeckStatsList.Save();
 			DeckList.Save();
@@ -842,11 +810,8 @@ namespace Hearthstone_Deck_Tracker
 			DataGridOverallGames.Items.Refresh();
 		}
 
-		private bool MatchesTagFilters(Deck deck)
-		{
-			return !Config.Instance.StatsOverallApplyTagFilters || Config.Instance.SelectedTags.Contains("All")
+		private bool MatchesTagFilters(Deck deck) => !Config.Instance.StatsOverallApplyTagFilters || Config.Instance.SelectedTags.Contains("All")
 			       || deck.Tags.Any(tag => Config.Instance.SelectedTags.Contains(tag));
-		}
 
 		private void CheckboxPercent_Checked(object sender, RoutedEventArgs e)
 		{
@@ -916,15 +881,9 @@ namespace Hearthstone_Deck_Tracker
 			}
 		}
 
-		private void TabItemDeck_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
-		{
-			StackPanelUnassignedFilter.Visibility = Visibility.Collapsed;
-		}
+		private void TabItemDeck_OnPreviewMouseDown(object sender, MouseButtonEventArgs e) => StackPanelUnassignedFilter.Visibility = Collapsed;
 
-		private void TabItemOverall_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
-		{
-			StackPanelUnassignedFilter.Visibility = Visibility.Visible;
-		}
+		private void TabItemOverall_OnPreviewMouseDown(object sender, MouseButtonEventArgs e) => StackPanelUnassignedFilter.Visibility = Visible;
 
 		private void BtnOverallShowOpponentDeck_Click(object sender, RoutedEventArgs e)
 		{
@@ -973,7 +932,7 @@ namespace Hearthstone_Deck_Tracker
 			var addedGame = await Core.MainWindow.ShowAddGameDialog(_deck);
 			if(addedGame)
 				Refresh();
-			}
+		}
 
 		private void BtnEditGame_Click(object sender, RoutedEventArgs e)
 		{
@@ -995,18 +954,12 @@ namespace Hearthstone_Deck_Tracker
 				return;
 			var edited = await Core.MainWindow.ShowEditGameDialog(game);
 			if(edited)
-			Refresh();
+				Refresh();
 		}
 
-		private void TabControlDeck_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-		{
-			TabControlOverall.SelectedIndex = TabControlDeck.SelectedIndex;
-		}
+		private void TabControlDeck_OnSelectionChanged(object sender, SelectionChangedEventArgs e) => TabControlOverall.SelectedIndex = TabControlDeck.SelectedIndex;
 
-		private void TabControlOverall_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-		{
-			TabControlDeck.SelectedIndex = TabControlOverall.SelectedIndex;
-		}
+		private void TabControlOverall_OnSelectionChanged(object sender, SelectionChangedEventArgs e) => TabControlDeck.SelectedIndex = TabControlOverall.SelectedIndex;
 
 		public class WinLoss
 		{
@@ -1023,10 +976,7 @@ namespace Hearthstone_Deck_Tracker
 				_percent = text == "%";
 				_stats = stats;
 				Text = text;
-				if(version == null)
-					Version = "ALL";
-				else
-					Version = version.ToString("v{M}.{m}");
+				Version = version == null ? "ALL" : version.ToString("v{M}.{m}");
 			}
 
 			public WinLoss(List<GameStats> stats, bool percent, string playerHero)
@@ -1049,72 +999,33 @@ namespace Hearthstone_Deck_Tracker
 				}
 			}
 
-			public Visibility VisibilityImage
-			{
-				get { return _playerHero != "Total" ? Visibility.Visible : Visibility.Collapsed; }
-			}
+			public Visibility VisibilityImage => _playerHero != "Total" ? Visible : Collapsed;
 
-			public Visibility VisibilityText
-			{
-				get { return _playerHero == "Total" ? Visibility.Visible : Visibility.Collapsed; }
-			}
+			public Visibility VisibilityText => _playerHero == "Total" ? Visible : Collapsed;
 
-			public string PlayerText
-			{
-				get { return _playerHero.ToUpper(); }
-			}
+			public string PlayerText => _playerHero.ToUpper();
 
 			public string Text { get; private set; }
 
-			public string Total
-			{
-				get { return _percent ? GetPercent() : GetWinLoss(); }
-			}
+			public string Total => _percent ? GetPercent() : GetWinLoss();
 
-			public string Druid
-			{
-				get { return GetClassDisplayString("Druid"); }
-			}
+			public string Druid => GetClassDisplayString("Druid");
 
-			public string Hunter
-			{
-				get { return GetClassDisplayString("Hunter"); }
-			}
+			public string Hunter => GetClassDisplayString("Hunter");
 
-			public string Mage
-			{
-				get { return GetClassDisplayString("Mage"); }
-			}
+			public string Mage => GetClassDisplayString("Mage");
 
-			public string Paladin
-			{
-				get { return GetClassDisplayString("Paladin"); }
-			}
+			public string Paladin => GetClassDisplayString("Paladin");
 
-			public string Priest
-			{
-				get { return GetClassDisplayString("Priest"); }
-			}
+			public string Priest => GetClassDisplayString("Priest");
 
-			public string Rogue
-			{
-				get { return GetClassDisplayString("Rogue"); }
-			}
+			public string Rogue => GetClassDisplayString("Rogue");
 
-			public string Shaman
-			{
-				get { return GetClassDisplayString("Shaman"); }
-			}
+			public string Shaman => GetClassDisplayString("Shaman");
 
-			public string Warrior
-			{
-				get { return GetClassDisplayString("Warrior"); }
-			}
+			public string Warrior => GetClassDisplayString("Warrior");
 
-			public string Warlock
-			{
-				get { return GetClassDisplayString("Warlock"); }
-			}
+			public string Warlock => GetClassDisplayString("Warlock");
 
 			private string GetWinLoss(string hsClass = null)
 			{
@@ -1134,10 +1045,7 @@ namespace Hearthstone_Deck_Tracker
 				return total > 0 ? Math.Round(100.0 * wins / total, 1) + "%" : "-";
 			}
 
-			private string GetClassDisplayString(string hsClass)
-			{
-				return _percent ? GetPercent(hsClass) : GetWinLoss(hsClass);
-			}
+			private string GetClassDisplayString(string hsClass) => _percent ? GetPercent(hsClass) : GetWinLoss(hsClass);
 		}
 	}
 }
