@@ -4,8 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using HearthDb.Enums;
 using Hearthstone_Deck_Tracker.Enums;
-using Hearthstone_Deck_Tracker.Enums.Hearthstone;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Hearthstone.Entities;
 using Hearthstone_Deck_Tracker.LogReader.Interfaces;
@@ -19,20 +19,25 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 {
 	public class PowerHandler
 	{
+		private DateTime _lastDeterminePlayersWarning1 = DateTime.MinValue;
+		private DateTime _lastDeterminePlayersWarning2 = DateTime.MinValue;
 		private readonly TagChangeHandler _tagChangeHandler = new TagChangeHandler();
 		private readonly List<Entity> _tmpEntities = new List<Entity>();
 
 		public void Handle(string logLine, IHsGameState gameState, IGame game)
 		{
 			var setup = false;
+			var creationTag = false;
 			if(GameEntityRegex.IsMatch(logLine))
 			{
 				var match = GameEntityRegex.Match(logLine);
 				var id = int.Parse(match.Groups["id"].Value);
 				if(!game.Entities.ContainsKey(id))
 					game.Entities.Add(id, new Entity(id) {Name = "GameEntity"});
-				gameState.CurrentEntityId = id;
-				setup = true;
+				gameState.SetCurrentEntity(id);
+				if(gameState.DeterminedPlayers)
+					_tagChangeHandler.InvokeQueuedActions(game);
+				return;
 			}
 			else if(PlayerEntityRegex.IsMatch(logLine))
 			{
@@ -40,8 +45,12 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 				var id = int.Parse(match.Groups["id"].Value);
 				if(!game.Entities.ContainsKey(id))
 					game.Entities.Add(id, new Entity(id));
-				gameState.CurrentEntityId = id;
-				setup = true;
+				if(gameState.WasInProgress)
+					game.Entities[id].Name = game.GetStoredPlayerName(id);
+				gameState.SetCurrentEntity(id);
+				if(gameState.DeterminedPlayers)
+					_tagChangeHandler.InvokeQueuedActions(game);
+				return;
 			}
 			else if(TagChangeRegex.IsMatch(logLine))
 			{
@@ -62,13 +71,16 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 
 					if(entity.Value == null)
 					{
-						entity = game.Entities.FirstOrDefault(x => x.Value.Name == "UNKNOWN HUMAN PLAYER");
-						if(entity.Value != null)
-							entity.Value.Name = rawEntity;
-					}
+						var players = game.Entities.Where(x => x.Value.HasTag(GameTag.PLAYER_ID)).Take(2).ToList();
+						var unnamedPlayers = players.Where(x => string.IsNullOrEmpty(x.Value.Name)).ToList();
+						var unknownHumanPlayer = players.FirstOrDefault(x => x.Value.Name == "UNKNOWN HUMAN PLAYER");
+						if(unnamedPlayers.Count == 0 && unknownHumanPlayer.Value != null)
+						{
+							Log.Info("Updating UNKNOWN HUMAN PLAYER");
+							entity = unknownHumanPlayer;
+							SetPlayerName(game, entity.Value.GetTag(GameTag.PLAYER_ID), rawEntity);
+						}
 
-					if(entity.Value == null)
-					{
 						//while the id is unknown, store in tmp entities
 						var tmpEntity = _tmpEntities.FirstOrDefault(x => x.Name == rawEntity);
 						if(tmpEntity == null)
@@ -76,34 +88,33 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 							tmpEntity = new Entity(_tmpEntities.Count + 1) {Name = rawEntity};
 							_tmpEntities.Add(tmpEntity);
 						}
-						GAME_TAG tag;
+						GameTag tag;
 						Enum.TryParse(match.Groups["tag"].Value, out tag);
-						var value = LogReaderHelper.ParseTagValue(tag, match.Groups["value"].Value);
-						var unnamedPlayers = game.Entities.Where(x => x.Value.HasTag(GAME_TAG.PLAYER_ID) && string.IsNullOrEmpty(x.Value.Name)).ToList();
+						var value = LogReaderHelper.ParseTag(tag, match.Groups["value"].Value);
 						if(unnamedPlayers.Count == 1)
 							entity = unnamedPlayers.Single();
-						else if(unnamedPlayers.Count == 2 && tag == GAME_TAG.CURRENT_PLAYER && value == 0)
-							entity = game.Entities.FirstOrDefault(x => x.Value?.HasTag(GAME_TAG.CURRENT_PLAYER) ?? false);
+						else if(unnamedPlayers.Count == 2 && tag == GameTag.CURRENT_PLAYER && value == 0)
+							entity = game.Entities.FirstOrDefault(x => x.Value?.HasTag(GameTag.CURRENT_PLAYER) ?? false);
 						if(entity.Value != null)
 						{
 							entity.Value.Name = tmpEntity.Name;
 							foreach(var t in tmpEntity.Tags)
-								entity.Value.SetTag(t.Key, t.Value);
-							SetPlayerName(game, entity.Value.GetTag(GAME_TAG.PLAYER_ID), tmpEntity.Name);
+								_tagChangeHandler.TagChange(gameState, t.Key, entity.Key, t.Value, game);
+							SetPlayerName(game, entity.Value.GetTag(GameTag.PLAYER_ID), tmpEntity.Name);
 							_tmpEntities.Remove(tmpEntity);
 							_tagChangeHandler.TagChange(gameState, match.Groups["tag"].Value, entity.Key, match.Groups["value"].Value, game);
 						}
 						if(_tmpEntities.Contains(tmpEntity))
 						{
 							tmpEntity.SetTag(tag, value);
-							if(tmpEntity.HasTag(GAME_TAG.ENTITY_ID))
+							if(tmpEntity.HasTag(GameTag.ENTITY_ID))
 							{
-								var id = tmpEntity.GetTag(GAME_TAG.ENTITY_ID);
+								var id = tmpEntity.GetTag(GameTag.ENTITY_ID);
 								if(game.Entities.ContainsKey(id))
 								{
 									game.Entities[id].Name = tmpEntity.Name;
 									foreach(var t in tmpEntity.Tags)
-										game.Entities[id].SetTag(t.Key, t.Value);
+										_tagChangeHandler.TagChange(gameState, t.Key, id, t.Value, game);
 									_tmpEntities.Remove(tmpEntity);
 								}
 								else
@@ -140,9 +151,12 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 					}
 					game.Entities.Add(id, new Entity(id) {CardId = cardId});
 				}
-				gameState.CurrentEntityId = id;
+				gameState.SetCurrentEntity(id);
+				if(gameState.DeterminedPlayers)
+					_tagChangeHandler.InvokeQueuedActions(game);
 				gameState.CurrentEntityHasCardId = !string.IsNullOrEmpty(cardId);
-				setup = true;
+				gameState.CurrentEntityZone = LogReaderHelper.ParseEnum<Zone>(match.Groups["zone"].Value);
+				return;
 			}
 			else if(UpdatingEntityRegex.IsMatch(logLine))
 			{
@@ -159,10 +173,12 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 					entityId = -1;
 				if(entityId != -1)
 				{
-					gameState.CurrentEntityId = entityId;
 					if(!game.Entities.ContainsKey(entityId))
 						game.Entities.Add(entityId, new Entity(entityId));
 					game.Entities[entityId].CardId = cardId;
+					gameState.SetCurrentEntity(entityId);
+					if(gameState.DeterminedPlayers)
+						_tagChangeHandler.InvokeQueuedActions(game);
 				}
 				if(gameState.JoustReveals > 0)
 				{
@@ -176,28 +192,27 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 					}
 					//gameState.JoustReveals--;
 				}
+				return;
 			}
 			else if(CreationTagRegex.IsMatch(logLine) && !logLine.Contains("HIDE_ENTITY"))
 			{
 				var match = CreationTagRegex.Match(logLine);
-				_tagChangeHandler.TagChange(gameState, match.Groups["tag"].Value, gameState.CurrentEntityId, match.Groups["value"].Value, game);
+				_tagChangeHandler.TagChange(gameState, match.Groups["tag"].Value, gameState.CurrentEntityId, match.Groups["value"].Value, game, true);
 				setup = true;
+				creationTag = true;
 			}
-			else if((logLine.Contains("Begin Spectating") || logLine.Contains("Start Spectator")) && game.IsInMenu)
-				gameState.GameHandler.SetGameMode(GameMode.Spectator);
-			else if(logLine.Contains("End Spectator"))
-			{
-				gameState.GameHandler.SetGameMode(GameMode.Spectator);
+			if(logLine.Contains("End Spectator"))
 				gameState.GameHandler.HandleGameEnd();
-			}
-			else if(ActionStartRegex.IsMatch(logLine))
+			else if(BlockStartRegex.IsMatch(logLine))
 			{
 				var playerEntity =
-					game.Entities.FirstOrDefault(e => e.Value.HasTag(GAME_TAG.PLAYER_ID) && e.Value.GetTag(GAME_TAG.PLAYER_ID) == game.Player.Id);
+					game.Entities.FirstOrDefault(
+						e => e.Value.HasTag(GameTag.PLAYER_ID) && e.Value.GetTag(GameTag.PLAYER_ID) == game.Player.Id);
 				var opponentEntity =
-					game.Entities.FirstOrDefault(e => e.Value.HasTag(GAME_TAG.PLAYER_ID) && e.Value.GetTag(GAME_TAG.PLAYER_ID) == game.Opponent.Id);
+					game.Entities.FirstOrDefault(
+						e => e.Value.HasTag(GameTag.PLAYER_ID) && e.Value.GetTag(GameTag.PLAYER_ID) == game.Opponent.Id);
 
-				var match = ActionStartRegex.Match(logLine);
+				var match = BlockStartRegex.Match(logLine);
 				var actionStartingCardId = match.Groups["cardId"].Value.Trim();
 				var actionStartingEntityId = int.Parse(match.Groups["id"].Value);
 
@@ -215,7 +230,7 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 					{
 						case Collectible.Rogue.TradePrinceGallywix:
 							AddKnownCardId(gameState, game, game.Entities[gameState.LastCardPlayed].CardId);
-							AddKnownCardId(gameState, game, NonCollectible.Neutral.GallywixsCoinToken);
+							AddKnownCardId(gameState, game, NonCollectible.Neutral.TradePrinceGallywix_GallywixsCoinToken);
 							break;
 					}
 				}
@@ -227,41 +242,45 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 							AddTargetAsKnownCardId(gameState, game, match, 3);
 							break;
 						case Collectible.Rogue.BeneathTheGrounds:
-							AddKnownCardId(gameState, game, NonCollectible.Rogue.AmbushToken, 3);
+							AddKnownCardId(gameState, game, NonCollectible.Rogue.BeneaththeGrounds_AmbushToken, 3);
 							break;
 						case Collectible.Warrior.IronJuggernaut:
-							AddKnownCardId(gameState, game, NonCollectible.Warrior.BurrowingMineToken);
+							AddKnownCardId(gameState, game, NonCollectible.Warrior.IronJuggernaut_BurrowingMineToken);
 							break;
 						case Collectible.Druid.Recycle:
 							AddTargetAsKnownCardId(gameState, game, match);
 							break;
 						case Collectible.Mage.ForgottenTorch:
-							AddKnownCardId(gameState, game, NonCollectible.Mage.RoaringTorchToken);
+							AddKnownCardId(gameState, game, NonCollectible.Mage.ForgottenTorch_RoaringTorchToken);
 							break;
 						case Collectible.Warlock.CurseOfRafaam:
-							AddKnownCardId(gameState, game, NonCollectible.Warlock.CursedToken);
+							AddKnownCardId(gameState, game, NonCollectible.Warlock.CurseofRafaam_CursedToken);
 							break;
 						case Collectible.Neutral.AncientShade:
-							AddKnownCardId(gameState, game, NonCollectible.Neutral.AncientCurseToken);
+							AddKnownCardId(gameState, game, NonCollectible.Neutral.AncientShade_AncientCurseToken);
 							break;
 						case Collectible.Priest.ExcavatedEvil:
 							AddKnownCardId(gameState, game, Collectible.Priest.ExcavatedEvil);
 							break;
 						case Collectible.Neutral.EliseStarseeker:
-							AddKnownCardId(gameState, game, NonCollectible.Neutral.MapToTheGoldenMonkeyToken);
+							AddKnownCardId(gameState, game, NonCollectible.Neutral.EliseStarseeker_MapToTheGoldenMonkeyToken);
 							break;
-						case NonCollectible.Neutral.MapToTheGoldenMonkeyToken:
-							AddKnownCardId(gameState, game, NonCollectible.Neutral.GoldenMonkeyToken);
+						case NonCollectible.Neutral.EliseStarseeker_MapToTheGoldenMonkeyToken:
+							AddKnownCardId(gameState, game, NonCollectible.Neutral.EliseStarseeker_GoldenMonkeyToken);
+							break;
+						case Collectible.Neutral.Doomcaller:
+							AddKnownCardId(gameState, game, NonCollectible.Neutral.Cthun);
 							break;
 						default:
-							if(playerEntity.Value != null && playerEntity.Value.GetTag(GAME_TAG.CURRENT_PLAYER) == 1 && !gameState.PlayerUsedHeroPower
-							   || opponentEntity.Value != null && opponentEntity.Value.GetTag(GAME_TAG.CURRENT_PLAYER) == 1
-							   && !gameState.OpponentUsedHeroPower)
+							if(playerEntity.Value != null && playerEntity.Value.GetTag(GameTag.CURRENT_PLAYER) == 1
+								&& !gameState.PlayerUsedHeroPower
+								|| opponentEntity.Value != null && opponentEntity.Value.GetTag(GameTag.CURRENT_PLAYER) == 1
+								&& !gameState.OpponentUsedHeroPower)
 							{
 								var card = Database.GetCardFromId(actionStartingCardId);
 								if(card.Type == "Hero Power")
 								{
-									if(playerEntity.Value != null && playerEntity.Value.GetTag(GAME_TAG.CURRENT_PLAYER) == 1)
+									if(playerEntity.Value != null && playerEntity.Value.GetTag(GameTag.CURRENT_PLAYER) == 1)
 									{
 										gameState.GameHandler.HandlePlayerHeroPower(actionStartingCardId, gameState.GetTurnNumber());
 										gameState.PlayerUsedHeroPower = true;
@@ -280,8 +299,34 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 			else if(logLine.Contains("BlockType=JOUST"))
 				gameState.JoustReveals = 2;
 			else if(logLine.Contains("CREATE_GAME"))
+			{
 				setup = true;
+				_tagChangeHandler.ClearQueuedActions();
+			}
 
+
+			if(game.IsInMenu)
+				return;
+			if(!creationTag && gameState.DeterminedPlayers)
+				_tagChangeHandler.InvokeQueuedActions(game);
+			if(!creationTag)
+				gameState.ResetCurrentEntity();
+			if(!gameState.DeterminedPlayers && gameState.SetupDone)
+			{
+				if((DateTime.Now - _lastDeterminePlayersWarning1).TotalSeconds > 5)
+				{
+					Log.Warn("Could not determine players by checking for opponent hand.");
+					_lastDeterminePlayersWarning1 = DateTime.Now;
+				}
+				var playerCard = game.Entities.FirstOrDefault(x => x.Value.IsInHand && !string.IsNullOrEmpty(x.Value.CardId)).Value;
+				if(playerCard != null)
+					_tagChangeHandler.DeterminePlayers(gameState, game, playerCard.GetTag(GameTag.CONTROLLER), false);
+				else if((DateTime.Now - _lastDeterminePlayersWarning2).TotalSeconds > 5)
+				{
+					Log.Warn("Could not determine players by checking for player hand either... waiting for draws...");
+					_lastDeterminePlayersWarning2 = DateTime.Now;
+				}
+			}
 			if(!setup)
 				gameState.SetupDone = true;
 		}
@@ -322,5 +367,10 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 		}
 
 		private static int GetMaxEntityId(IHsGameState gameState, IGame game) => Math.Max(game.Entities.Count, gameState.MaxId);
+
+		internal void Reset()
+		{
+			_tagChangeHandler.ClearQueuedActions();
+		}
 	}
 }

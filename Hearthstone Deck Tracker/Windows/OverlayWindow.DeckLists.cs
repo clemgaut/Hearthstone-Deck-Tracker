@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Hearthstone_Deck_Tracker.Enums;
+using Hearthstone_Deck_Tracker.Hearthstone;
 
 namespace Hearthstone_Deck_Tracker.Windows
 {
@@ -18,13 +20,10 @@ namespace Hearthstone_Deck_Tracker.Windows
 		public void UpdatePlayerLayout()
 		{
 			StackPanelPlayer.Children.Clear();
-			foreach (var item in Config.Instance.PanelOrderPlayer)
+			foreach(var item in Config.Instance.PanelOrderPlayer)
 			{
-				switch (item)
+				switch(item)
 				{
-					case DeckPanelCards:
-						StackPanelPlayer.Children.Add(ListViewPlayer);
-						break;
 					case DeckPanelDrawChances:
 						StackPanelPlayer.Children.Add(CanvasPlayerChance);
 						break;
@@ -40,6 +39,9 @@ namespace Hearthstone_Deck_Tracker.Windows
 					case DeckPanelWins:
 						StackPanelPlayer.Children.Add(LblWins);
 						break;
+					case DeckPanelCards:
+						StackPanelPlayer.Children.Add(ViewBoxPlayer);
+						break;
 				}
 			}
 		}
@@ -51,9 +53,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 			{
 				switch (item)
 				{
-					case DeckPanelCards:
-						StackPanelOpponent.Children.Add(ListViewOpponent);
-						break;
 					case DeckPanelDrawChances:
 						StackPanelOpponent.Children.Add(CanvasOpponentChance);
 						break;
@@ -64,7 +63,10 @@ namespace Hearthstone_Deck_Tracker.Windows
 						StackPanelOpponent.Children.Add(LblOpponentFatigue);
 						break;
 					case DeckPanelWinrate:
-						StackPanelOpponent.Children.Add(ViewBoxWinRateAgainst);
+						StackPanelOpponent.Children.Add(LblWinRateAgainst);
+						break;
+					case DeckPanelCards:
+						StackPanelOpponent.Children.Add(ViewBoxOpponent);
 						break;
 				}
 			}
@@ -87,7 +89,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 			}
 		}
 
-		private void SetDeckTitle() => LblDeckTitle.Text = DeckList.Instance.ActiveDeckVersion?.Name ?? "";
+		private void SetDeckTitle() => LblDeckTitle.Text = DeckList.Instance.ActiveDeck?.Name ?? "";
 
 		private void SetOpponentCardCount(int cardCount, int cardsLeftInDeck)
 		{
@@ -140,23 +142,8 @@ namespace Hearthstone_Deck_Tracker.Windows
 			LblDrawChance1.Text = Math.Round(100.0f / cardsLeftInDeck, 1) + "%";
 		}
 
-		public async void UpdatePlayerCards()
-		{
-			_lastPlayerUpdateReqest = DateTime.Now;
-			await Task.Delay(50);
-			if ((DateTime.Now - _lastPlayerUpdateReqest).Milliseconds < 50)
-				return;
-			OnPropertyChanged(nameof(PlayerDeck));
-		}
+		public void UpdatePlayerCards(List<Card> cards, bool reset) => ListViewPlayer.Update(cards, reset);
 
-		public async void UpdateOpponentCards()
-		{
-			_lastOpponentUpdateReqest = DateTime.Now;
-			await Task.Delay(50);
-			if ((DateTime.Now - _lastOpponentUpdateReqest).Milliseconds < 50)
-				return;
-			OnPropertyChanged(nameof(OpponentDeck));
-		}
-
+		public void UpdateOpponentCards(List<Card> cards, bool reset) => ListViewOpponent.Update(cards, reset);
 	}
 }

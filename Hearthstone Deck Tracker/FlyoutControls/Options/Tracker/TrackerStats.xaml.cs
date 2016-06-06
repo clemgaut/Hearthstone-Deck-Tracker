@@ -39,7 +39,6 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 			CheckboxAskBeforeDiscarding.IsEnabled = Config.Instance.DiscardGameIfIncorrectDeck;
 			CheckboxRecordSpectator.IsChecked = Config.Instance.RecordSpectator;
 			CheckboxDiscardZeroTurnGame.IsChecked = Config.Instance.DiscardZeroTurnGame;
-			CheckboxSaveHSLogIntoReplayFile.IsChecked = Config.Instance.SaveHSLogIntoReplay;
 			CheckboxDeleteDeckKeepStats.IsChecked = Config.Instance.KeepStatsWhenDeletingDeck;
 			CheckboxStatsInWindow.IsChecked = Config.Instance.StatsInWindow;
 			CheckboxReplays.IsChecked = Config.Instance.RecordReplays;
@@ -217,22 +216,6 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 			Config.Save();
 		}
 
-		private void CheckboxSaveHSLogIntoReplayFile_Checked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.SaveHSLogIntoReplay = true;
-			Config.Save();
-		}
-
-		private void CheckboxSaveHSLogIntoReplayFile_Unchecked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.SaveHSLogIntoReplay = false;
-			Config.Save();
-		}
-
 		private void CheckboxRecordReplays_Checked(object sender, RoutedEventArgs e)
 		{
 			if(!_initialized)
@@ -287,7 +270,8 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 				return;
 			Config.Instance.DisplayedStats = (DisplayedStats)ComboboxDisplayedStats.SelectedItem;
 			Config.Save();
-			Core.MainWindow.DeckPickerList.UpdateDecks();
+			foreach(var deck in DeckList.Instance.Decks)
+				deck.StatsUpdated();
 			Core.Overlay.Update(true);
 		}
 
@@ -297,7 +281,8 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 				return;
 			Config.Instance.DisplayedMode = (GameMode)ComboboxDisplayedMode.SelectedItem;
 			Config.Save();
-			Core.MainWindow.DeckPickerList.UpdateDecks();
+			foreach(var deck in DeckList.Instance.Decks)
+				deck.StatsUpdated();
 			Core.Overlay.Update(true);
 		}
 
@@ -307,7 +292,8 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 				return;
 			Config.Instance.DisplayedTimeFrame = (DisplayedTimeFrame)ComboboxDisplayedTimeFrame.SelectedItem;
 			Config.Save();
-			Core.MainWindow.DeckPickerList.UpdateDecks();
+			foreach(var deck in DeckList.Instance.Decks)
+				deck.StatsUpdated();
 			Core.Overlay.Update(true);
 			PanelCustomTimeFrame.Visibility = Config.Instance.DisplayedTimeFrame == DisplayedTimeFrame.Custom
 				                                  ? Visibility.Visible : Visibility.Collapsed;
@@ -319,7 +305,8 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 				return;
 			Config.Instance.CustomDisplayedTimeFrame = DatePickerCustomTimeFrame.SelectedDate;
 			Config.Save();
-			Core.MainWindow.DeckPickerList.UpdateDecks();
+			foreach(var deck in DeckList.Instance.Decks)
+				deck.StatsUpdated();
 			Core.Overlay.Update(true);
 		}
 

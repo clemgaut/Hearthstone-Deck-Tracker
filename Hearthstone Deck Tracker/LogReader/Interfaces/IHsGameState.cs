@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using HearthDb.Enums;
 using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.Replay;
 
@@ -11,12 +12,8 @@ namespace Hearthstone_Deck_Tracker.LogReader.Interfaces
 {
 	public interface IHsGameState
 	{
-		int AddToTurn { get; set; }
 		bool CurrentEntityHasCardId { get; set; }
-		int CurrentEntityId { get; set; }
-		long CurrentOffset { get; set; }
-		bool DoUpdate { get; set; }
-		bool First { get; set; }
+		int CurrentEntityId { get; }
 		bool GameEnded { get; set; }
 		IGameHandler GameHandler { get; set; }
 		DateTime LastGameStart { get; set; }
@@ -24,19 +21,20 @@ namespace Hearthstone_Deck_Tracker.LogReader.Interfaces
 		int MaxId { get; set; }
 		bool OpponentUsedHeroPower { get; set; }
 		bool PlayerUsedHeroPower { get; set; }
-		long PreviousSize { get; set; }
 		ReplayKeyPoint ProposedKeyPoint { get; set; }
-		dynamic WaitForController { get; set; }
 		bool FoundSpectatorStart { get; set; }
 		int JoustReveals { get; set; }
 		Dictionary<int, string> KnownCardIds { get; set; }
 		int LastCardPlayed { get; set; }
 		bool WasInProgress { get; set; }
 		bool SetupDone { get; set; }
+		Zone CurrentEntityZone { get; set; }
+		bool DeterminedPlayers { get; set; }
 		void ProposeKeyPoint(KeyPointType type, int id, ActivePlayer player);
 		int GetTurnNumber();
 		void GameEndKeyPoint(bool victory, int id);
-		bool PlayersTurn();
 		void Reset();
+		void SetCurrentEntity(int id);
+		void ResetCurrentEntity();
 	}
 }

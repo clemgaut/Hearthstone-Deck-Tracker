@@ -159,23 +159,9 @@ namespace Hearthstone_Deck_Tracker
 
 			if(_formattedText == null)
 				return;
-
-			const int outlineWidth = 1;
-			const int step = 1;
-
-			_formattedText.SetForegroundBrush(Stroke);
-
-			for(var x = -outlineWidth; x <= outlineWidth; x += step)
-			{
-				for(var y = -outlineWidth; y <= outlineWidth; y += step)
-				{
-					if(x != 0 || y != 0)
-						drawingContext.DrawText(_formattedText, new Point(x, y));
-				}
-			}
-
-			_formattedText.SetForegroundBrush(Fill);
-			drawingContext.DrawText(_formattedText, new Point(0, 0));
+			var y = !double.IsNaN(ActualHeight) ? (ActualHeight - _formattedText.Height) / 2 + _formattedText.Height * 0.05: 0;
+			drawingContext.DrawGeometry(Stroke, new Pen(Brushes.Black, 2.0) {LineJoin = PenLineJoin.Round}, _formattedText.BuildGeometry(new Point(0, y)));
+			drawingContext.DrawGeometry(Fill, new Pen(Brushes.White, 0), _formattedText.BuildGeometry(new Point(0, y)));
 		}
 
 		protected override Size MeasureOverride(Size availableSize)
@@ -187,11 +173,15 @@ namespace Hearthstone_Deck_Tracker
 			// constrain the formatted text according to the available size
 			// the Math.Min call is important - without this constraint (which seems arbitrary, but is the maximum allowable text width), things blow up when availableSize is infinite in both directions
 			// the Math.Max call is to ensure we don't hit zero, which will cause MaxTextHeight to throw
-			_formattedText.MaxTextWidth = Math.Min(3579139, Math.Max(0.0001d, availableSize.Width));
+			var maxWidth = Math.Min(3579139, Math.Max(0.0001d, availableSize.Width));
+			var ratio = maxWidth / _formattedText.Width;
+			if(ratio < 1 && (TextWrapping == TextWrapping.NoWrap || ratio > 0.8))
+				_formattedText.SetFontSize((int)(FontSize * ratio));
+			_formattedText.MaxTextWidth = maxWidth;
 			_formattedText.MaxTextHeight = Math.Max(0.0001d, availableSize.Height);
 
 			// return the desired size
-			return new Size(_formattedText.Width, _formattedText.Height);
+			return new Size(_formattedText.Width, _formattedText.Height + 2);
 		}
 
 		protected override Size ArrangeOverride(Size finalSize)
@@ -231,8 +221,8 @@ namespace Hearthstone_Deck_Tracker
 				return;
 
 			_formattedText = new FormattedText(Text, CultureInfo.CurrentUICulture, FlowDirection,
-			                                   new Typeface(FontFamily, FontStyle, FontWeight, FontStretches.Normal), FontSize, Brushes.Black,
-			                                   null, TextFormattingMode.Display);
+			                                   new Typeface(FontFamily, FontStyle, FontWeight, FontStretches.Condensed), FontSize, Brushes.Black, 
+											   null, TextFormattingMode.Ideal);
 
 			UpdateFormattedText();
 		}

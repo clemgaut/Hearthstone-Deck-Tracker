@@ -13,6 +13,15 @@
         <GroupBox Header="Importing">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
+                    <GroupBox Header="Constructed">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap" Text="This will check for new and/or modified decks each time you enter the 'Play' menu." Margin="5,0,5,0"/>
+                            <CheckBox x:Name="CheckBoxConstructedImportNew" Content="Auto import new decks" Margin="10,5,0,0"
+                                      Checked="CheckBoxConstructedImportNew_Checked" Unchecked="CheckBoxConstructedImportNew_Unchecked" />
+                            <CheckBox x:Name="CheckBoxConstrucedUpdate" Content="Auto update modified decks" Margin="10,5,0,5"
+                                      Checked="CheckBoxConstrucedUpdate_Checked" Unchecked="CheckBoxConstrucedUpdate_Unchecked" />
+                        </StackPanel>
+                    </GroupBox>
                     <GroupBox Header="Arena">
                         <StackPanel>
                             <DockPanel Margin="10,5,10,0">
@@ -27,12 +36,6 @@
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
                             </DockPanel>
-                            <CheckBox Name="CheckboxUseOldArenaImporting" Content="Use old arena importing method"
-                                      Margin="10,5,0,0" Checked="CheckboxUseOldArenaImporting_OnChecked"
-                                      Unchecked="CheckboxUseOldArenaImporting_OnUnchecked" />
-                            <Button Name="BtnArenaHowTo" Margin="10,5,10,0" HorizontalAlignment="Stretch"
-                                    Content="SHOW ARENA IMPORTING HOW-TO" Click="ButtonArenaHowTo_OnClick"
-                                    IsEnabled="False" />
                             <GroupBox Header="Arena deck name template">
                                 <DockPanel>
                                     <TextBlock Text="Templates: {Class}, {Date FORMAT}" DockPanel.Dock="Bottom"
@@ -50,28 +53,27 @@
                             </GroupBox>
                         </StackPanel>
                     </GroupBox>
-                    <CheckBox x:Name="CheckboxTagOnImport" Content="Tag decks on import"
+                    <GroupBox Header="Web">
+                        <StackPanel>
+
+                            <CheckBox x:Name="CheckboxTagOnImport" Content="Tag decks on import"
                               HorizontalAlignment="Left" Margin="10,5,0,0"
                               VerticalAlignment="Top" Checked="CheckboxTagOnImport_Checked"
                               Unchecked="CheckboxTagOnImport_Unchecked" />
-                    <CheckBox Name="CheckboxAutoSaveOnImport" Content="Auto save deck on import" Margin="10,5,0,0"
+                            <CheckBox Name="CheckboxAutoSaveOnImport" Content="Auto save deck on import" Margin="10,5,0,0"
                               Checked="CheckboxAutoSaveOnImport_OnChecked"
                               Unchecked="CheckboxAutoSaveOnImport_OnUnchecked" />
-                    <CheckBox Name="CheckboxImportNetDeck" Content="Auto import via NetDeck" Margin="10,5,0,0"
+                            <CheckBox Name="CheckboxImportNetDeck" Content="Auto import via NetDeck" Margin="10,5,0,0"
                               Checked="CheckboxImportNetDeck_OnChecked" Unchecked="CheckboxImportNetDeck_OnUnchecked" />
-                    <TextBlock Margin="10,2,0,0">
+                            <TextBlock Margin="10,2,0,0">
                         <Hyperlink
                             NavigateUri="https://chrome.google.com/webstore/detail/netdeck/lpdbiakcpmcppnpchohihcbdnojlgeel"
                             RequestNavigate="Hyperlink_RequestNavigate">
                             Download NetDeck (Chrome ext.)
                         </Hyperlink>
-                    </TextBlock>
-                    <Button Margin="10,5,10,0" HorizontalAlignment="Stretch"
-                            Content="SHOW CONSTRUCTED IMPORTING HOW-TO" Click="ButtonConstructedHowTo_OnClick" />
-                    <Button Margin="10,5,10,0" HorizontalAlignment="Stretch" Content="SET UP CONSTRUCTED IMPORTING"
-                            Click="ButtonSetUpConstructed_OnClick" />
-                    <Button Margin="10,10,10,0" HorizontalAlignment="Stretch" Content="ACTIVATE HDT PROTOCOL"
-                            Click="ButtonActivateHdtProtocol_OnClick" />
+                            </TextBlock>
+                        </StackPanel>
+                    </GroupBox>
                 </StackPanel>
             </ScrollViewer>
         </GroupBox>

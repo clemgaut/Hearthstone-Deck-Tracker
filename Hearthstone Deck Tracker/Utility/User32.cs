@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows;
+using Point = System.Drawing.Point;
 
 #endregion
 
@@ -25,7 +27,11 @@ namespace Hearthstone_Deck_Tracker
 		public const int WsExTransparent = 0x00000020;
 		public const int WsExToolWindow = 0x00000080;
 		private const int GwlExstyle = (-20);
+		private const int GwlStyle = -16;
+		private const int WsMinimize = 0x20000000;
+		private const int WsMaximize = 0x1000000;
 		public const int SwRestore = 9;
+		public const int SwShow = 5;
 		private const int Alt = 0xA4;
 		private const int ExtendedKey = 0x1;
 		private const int KeyUp = 0x2;
@@ -79,6 +85,9 @@ namespace Hearthstone_Deck_Tracker
 		[DllImport("user32.dll")]
 		public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
 
+		[DllImport("user32.dll")]
+		public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
 		public static void SetWindowExStyle(IntPtr hwnd, int style) => SetWindowLong(hwnd, GwlExstyle, GetWindowLong(hwnd, GwlExstyle) | style);
 
 		public static bool IsHearthstoneInForeground() => GetForegroundWindow() == GetHearthstoneWindow();
@@ -92,6 +101,17 @@ namespace Hearthstone_Deck_Tracker
 			MousePoint p;
 			GetCursorPos(out p);
 			return new Point(p.X, p.Y);
+		}
+
+		public static WindowState GetHearthstoneWindowState()
+		{
+			var hsWindow = GetHearthstoneWindow();
+			var state = GetWindowLong(hsWindow, GwlStyle);
+			if((state & WsMaximize) == WsMaximize)
+				return WindowState.Maximized;
+			if((state & WsMinimize) == WsMinimize)
+				return WindowState.Minimized;
+			return WindowState.Normal;
 		}
 
 		public static IntPtr GetHearthstoneWindow()
@@ -135,6 +155,22 @@ namespace Hearthstone_Deck_Tracker
 			return _hsWindow;
 		}
 
+		public static Process GetHearthstoneProc()
+		{
+			if(_hsWindow == IntPtr.Zero)
+				return null;
+			try
+			{
+				uint procId;
+				GetWindowThreadProcessId(_hsWindow, out procId);
+				return Process.GetProcessById((int)procId);
+			}
+			catch
+			{
+				return null;
+			}
+		}
+
 		public static Rectangle GetHearthstoneRect(bool dpiScaling)
 		{
 			// Returns the co-ordinates of Hearthstone's client area in screen co-ordinates
@@ -168,6 +204,8 @@ namespace Hearthstone_Deck_Tracker
 		public static void BringHsToForeground()
 		{
 			var hsHandle = GetHearthstoneWindow();
+			if(hsHandle == IntPtr.Zero)
+				return;
 			ActivateWindow(hsHandle);
 			SetForegroundWindow(hsHandle);
 		}
@@ -182,7 +220,7 @@ namespace Hearthstone_Deck_Tracker
 				return;
 
 			// Show window maximized.
-			ShowWindow(mainWindowHandle, SwRestore);
+			ShowWindow(mainWindowHandle, GetHearthstoneWindowState() == WindowState.Minimized ? SwRestore : SwShow);
 
 			// Simulate an "ALT" key press.
 			keybd_event(Alt, 0x45, ExtendedKey | 0, 0);

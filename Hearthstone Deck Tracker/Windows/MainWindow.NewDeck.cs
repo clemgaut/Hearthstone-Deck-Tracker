@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,7 +9,6 @@ using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Media;
 using Hearthstone_Deck_Tracker.API;
-using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.HearthStats.API;
 using Hearthstone_Deck_Tracker.Stats;
@@ -22,6 +20,7 @@ using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using ListViewItem = System.Windows.Controls.ListViewItem;
 using RadioButton = System.Windows.Controls.RadioButton;
 using TextBox = System.Windows.Controls.TextBox;
+using HearthDb.Enums;
 
 #endregion
 
@@ -95,6 +94,8 @@ namespace Hearthstone_Deck_Tracker.Windows
 					if(selectedManaCost != "ALL" && ((selectedManaCost != "9+" || card.Cost < 9) && (selectedManaCost != card.Cost.ToString())))
 						continue;
 					if(selectedSet != "ALL" && !string.Equals(selectedSet, card.Set, StringComparison.InvariantCultureIgnoreCase))
+						continue;
+					if(!_newDeck.IsArenaDeck && !(CheckBoxIncludeWild.IsChecked ?? true) && Helper.WildOnlySets.Contains(card.Set))
 						continue;
 					switch(selectedNeutral)
 					{
@@ -282,7 +283,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 			if(cardInDeck != null)
 			{
 				if(!_newDeck.IsArenaDeck && CheckBoxConstructedCardLimits.IsChecked == true 
-					&&(cardInDeck.Count >= 2 || cardInDeck.Rarity == Rarity.Legendary && cardInDeck.Count >= 1))
+					&&(cardInDeck.Count >= 2 || cardInDeck.Rarity == Rarity.LEGENDARY && cardInDeck.Count >= 1))
 					return;
 				cardInDeck.Count++;
 			}
@@ -303,14 +304,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 			UpdateExpansionIcons();
 		}
 
-		private void UpdateExpansionIcons()
-		{
-			TextBlockIconLoe.Visibility = _newDeck?.ContainsSet("League of Explorers") ?? false ? Visible : Collapsed;
-			TextBlockIconTgt.Visibility = _newDeck?.ContainsSet("The Grand Tournament") ?? false ? Visible : Collapsed;
-			TextBlockIconBrm.Visibility = _newDeck?.ContainsSet("Blackrock Mountain") ?? false ? Visible : Collapsed;
-			TextBlockIconGvg.Visibility = _newDeck?.ContainsSet("Goblins vs Gnomes") ?? false ? Visible : Collapsed;
-			TextBlockIconNaxx.Visibility = _newDeck?.ContainsSet("Curse of Naxxramas") ?? false ? Visible : Collapsed;
-		}
+		private void UpdateExpansionIcons() => SetIcons.Update(_newDeck);
 
 		private void UpdateCardCount()
 		{
@@ -353,25 +347,20 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 		private void ExpandNewDeck()
 		{
-			const int widthWithHistoryPanel = 485;
 			const int widthWithoutHistoryPanel = 240;
 			if(GridNewDeck.Visibility != Visible)
 			{
 				GridNewDeck.Visibility = Visible;
 				MenuNewDeck.Visibility = Visible;
-				if(_newDeck != null && _newDeck.HasVersions)
-				{
-					PanelDeckHistory.Visibility = Visible;
-					GridNewDeck.Width = widthWithHistoryPanel;
-				}
-				else
-					GridNewDeck.Width = widthWithoutHistoryPanel;
+				ButtonVersionHistory.Visibility = _newDeck?.HasVersions ?? false ? Visible : Collapsed;
+				GridNewDeck.Width = widthWithoutHistoryPanel;
 				GridNewDeck.UpdateLayout();
 				Width += GridNewDeck.ActualWidth;
 				MinWidth += GridNewDeck.ActualWidth;
 			}
 			DeckPickerListCover.Visibility = Visible;
 			PanelVersionComboBox.Visibility = Collapsed;
+			BtnStartHearthstone.Visibility = Collapsed;
 			PanelCardCount.Visibility = Visible;
 
 			//move window left if opening the edit panel causes it to be outside of a screen
@@ -405,6 +394,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 					break;
 				}
 			}
+			UpdateExpansionIcons();
 		}
 
 		private void CloseNewDeck()
@@ -425,12 +415,15 @@ namespace Hearthstone_Deck_Tracker.Windows
 			var selectedDeck = DeckPickerList.SelectedDecks.FirstOrDefault();
 			PanelVersionComboBox.Visibility = selectedDeck != null && selectedDeck.HasVersions ? Visible : Collapsed;
 			PanelCardCount.Visibility = Collapsed;
+			BtnStartHearthstone.Visibility = Core.Game.IsRunning ? Collapsed : Visible;
+			TextBlockButtonVersionHistory.Text = "SHOW VERSION HISTORY";
 
 			if(MovedLeft.HasValue)
 			{
 				Left += MovedLeft.Value;
 				MovedLeft = null;
 			}
+			UpdateIntroLabelVisibility();
 		}
 
 		private void EnableMenuItems(bool enable)
@@ -439,6 +432,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 			MenuItemEdit.IsEnabled = enable;
 			MenuItemExportIds.IsEnabled = enable;
 			MenuItemExportScreenshot.IsEnabled = enable;
+			MenuItemExportScreenshotWithInfo.IsEnabled = enable;
 			MenuItemExportToHs.IsEnabled = enable;
 			MenuItemExportXml.IsEnabled = enable;
 		}
@@ -481,13 +475,21 @@ namespace Hearthstone_Deck_Tracker.Windows
 		private async void CreateNewDeck(string hero)
 		{
 			_newDeck = new Deck {Class = hero};
-
-			var result =
-				await
-				this.ShowMessageAsync("Deck type?", "Please select a deck type.", MessageDialogStyle.AffirmativeAndNegative,
-				                      new MessageDialogs.Settings {AffirmativeButtonText = "constructed", NegativeButtonText = "arena run"});
-			if(result == MessageDialogResult.Negative)
+			var type = await this.ShowDeckTypeDialog();
+			if(type == null)
+				return;
+			if(type == DeckType.Arena)
 				_newDeck.IsArenaDeck = true;
+			else if(type == DeckType.Brawl)
+			{
+				if(!DeckList.Instance.AllTags.Contains("Brawl"))
+				{
+					DeckList.Instance.AllTags.Add("Brawl");
+					DeckList.Save();
+					Core.MainWindow?.ReloadTags();
+				}
+				_newDeck.Tags.Add("Brawl");
+			}
 
 			BorderConstructedCardLimits.Visibility = _newDeck.IsArenaDeck ? Collapsed : Visible;
 			CheckBoxConstructedCardLimits.IsChecked = true;
@@ -560,6 +562,8 @@ namespace Hearthstone_Deck_Tracker.Windows
 		{
 			var index = ListViewDB.SelectedIndex;
 			Card card = null;
+			var shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+
 			switch(e.Key)
 			{
 				case Key.Enter:
@@ -569,23 +573,23 @@ namespace Hearthstone_Deck_Tracker.Windows
 						card = (Card)ListViewDB.Items[0];
 					break;
 				case Key.D1:
-					if(ListViewDB.Items.Count > 0)
+					if(ListViewDB.Items.Count > 0 && !shiftPressed)
 						card = (Card)ListViewDB.Items[0];
 					break;
 				case Key.D2:
-					if(ListViewDB.Items.Count > 1)
+					if(ListViewDB.Items.Count > 1 && !shiftPressed)
 						card = (Card)ListViewDB.Items[1];
 					break;
 				case Key.D3:
-					if(ListViewDB.Items.Count > 2)
+					if(ListViewDB.Items.Count > 2 && !shiftPressed)
 						card = (Card)ListViewDB.Items[2];
 					break;
 				case Key.D4:
-					if(ListViewDB.Items.Count > 3)
+					if(ListViewDB.Items.Count > 3 && !shiftPressed)
 						card = (Card)ListViewDB.Items[3];
 					break;
 				case Key.D5:
-					if(ListViewDB.Items.Count > 4)
+					if(ListViewDB.Items.Count > 4 && !shiftPressed)
 						card = (Card)ListViewDB.Items[4];
 					break;
 				case Key.Down:
@@ -681,5 +685,29 @@ namespace Hearthstone_Deck_Tracker.Windows
 		}
 
 		#endregion
+
+		private void CheckBoxIncludeWild_Changed(object sender, RoutedEventArgs e) => UpdateDbListView();
+
+		private void ButtonVersionHistory_OnClick(object sender, RoutedEventArgs e)
+		{
+			const int widthWithHistoryPanel = 485;
+			const int widthWithoutHistoryPanel = 240;
+			if(PanelDeckHistory.Visibility != Visible)
+			{
+				TextBlockButtonVersionHistory.Text = "HIDE VERSION HISTORY";
+				PanelDeckHistory.Visibility = Visible;
+				GridNewDeck.Width = widthWithHistoryPanel;
+				Width += widthWithHistoryPanel - widthWithoutHistoryPanel;
+				MinWidth += widthWithHistoryPanel - widthWithoutHistoryPanel;
+			}
+			else
+			{
+				TextBlockButtonVersionHistory.Text = "SHOW VERSION HISTORY";
+				PanelDeckHistory.Visibility = Collapsed;
+				GridNewDeck.Width = widthWithoutHistoryPanel;
+				MinWidth -= widthWithHistoryPanel - widthWithoutHistoryPanel;
+				Width -= widthWithHistoryPanel - widthWithoutHistoryPanel;
+			}
+		}
 	}
 }

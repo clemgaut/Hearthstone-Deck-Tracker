@@ -46,7 +46,7 @@ namespace Hearthstone_Deck_Tracker.Exporting
 				if(Config.Instance.ExportPasteClipboard)
 				{
 					Clipboard.SetText(name);
-					SendKeys.SendWait("^v");
+					SendKeys.SendWait("^{v}");
 				}
 				else
 					SendKeys.SendWait(name);
@@ -88,10 +88,10 @@ namespace Hearthstone_Deck_Tracker.Exporting
 
 			await ClickOnPoint(info.HsHandle, info.SearchBoxPos);
 
-			if(Config.Instance.ExportPasteClipboard)
+			if(Config.Instance.ExportPasteClipboard || !Helper.LatinLanguages.Contains(Config.Instance.SelectedLanguage))
 			{
 				Clipboard.SetText(GetSearchString(card));
-				SendKeys.SendWait("^v");
+				SendKeys.SendWait("^{v}");
 			}
 			else
 				SendKeys.SendWait(GetSearchString(card));
@@ -99,9 +99,6 @@ namespace Hearthstone_Deck_Tracker.Exporting
 
 			Log.Info("try to export card: " + card);
 			await Task.Delay(Config.Instance.DeckExportDelay * 2);
-
-			if(await CheckForSpecialCases(card, info.CardPosX + 50, info.Card2PosX + 50, info.CardPosY + 50, info.HsHandle))
-				return 0;
 
 			//Check if Card exist in collection
 			var cardExists = await CardExists(info.HsHandle, (int)info.CardPosX, (int)info.CardPosY, info.HsRect.Width, info.HsRect.Height);
@@ -156,7 +153,7 @@ namespace Hearthstone_Deck_Tracker.Exporting
 		{
 			Log.Info("Creating deck...");
 			deck.MissingCards.Clear();
-			foreach(var card in deck.Cards.ToSortedCardList())
+			foreach(var card in deck.GetSelectedDeckVersion().Cards.ToSortedCardList())
 			{
 				var missingCardsCount = await AddCardToDeck(card, info);
 				if(missingCardsCount < 0)
@@ -212,12 +209,14 @@ namespace Hearthstone_Deck_Tracker.Exporting
 
 			// open sets menu
 			await ClickOnPoint(info.HsHandle, setsPoint);
+			await Task.Delay(100);
 			// select "All Sets"
 			await
 				ClickOnPoint(info.HsHandle,
 				                          new Point(
 					                          (int)Helper.GetScaledXPos(Config.Instance.ExportAllSetsButtonX, info.HsRect.Width, info.Ratio),
-					                          (int)(Config.Instance.ExportAllSetsButtonY * info.HsRect.Height)));
+					                          (int)(Config.Instance.ExportStandardSetButtonY * info.HsRect.Height)));
+			await Task.Delay(100);
 			// close sets menu
 			await ClickOnPoint(info.HsHandle, setsPoint);
 		}

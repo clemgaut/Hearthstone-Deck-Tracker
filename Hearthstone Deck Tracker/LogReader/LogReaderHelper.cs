@@ -1,9 +1,8 @@
 ﻿#region
 
 using System;
-using Hearthstone_Deck_Tracker.Enums;
-using Hearthstone_Deck_Tracker.Enums.Hearthstone;
-using static Hearthstone_Deck_Tracker.Enums.GAME_TAG;
+using HearthDb.Enums;
+using static HearthDb.Enums.GameTag;
 
 #endregion
 
@@ -11,45 +10,38 @@ namespace Hearthstone_Deck_Tracker.LogReader
 {
 	public class LogReaderHelper
 	{
-		public static int ParseTagValue(GAME_TAG tag, string rawValue)
+		public static int ParseTag(GameTag tag, string rawValue)
 		{
-			int value;
 			switch(tag)
 			{
 				case ZONE:
-					TAG_ZONE zone;
-					Enum.TryParse(rawValue, out zone);
-					value = (int)zone;
-					break;
+					return (int)ParseEnum<Zone>(rawValue);
 				case MULLIGAN_STATE:
-				{
-					TAG_MULLIGAN state;
-					Enum.TryParse(rawValue, out state);
-					value = (int)state;
-				}
-					break;
+					return (int)ParseEnum<Mulligan>(rawValue);
 				case PLAYSTATE:
-				{
-					TAG_PLAYSTATE state;
-					Enum.TryParse(rawValue, out state);
-					value = (int)state;
-				}
-					break;
+					return (int)ParseEnum<PlayState>(rawValue);
 				case CARDTYPE:
-					TAG_CARDTYPE type;
-					Enum.TryParse(rawValue, out type);
-					value = (int)type;
-					break;
+					return (int)ParseEnum<CardType>(rawValue);
 				case CLASS:
-					TAG_CLASS @class;
-					Enum.TryParse(rawValue, out @class);
-					value = (int)@class;
-					break;
+					return (int)ParseEnum<CardClass>(rawValue);
+				case STATE:
+					return (int)ParseEnum<State>(rawValue);
 				default:
+					int value;
 					int.TryParse(rawValue, out value);
-					break;
+					return value;
 			}
-			return value;
+		}
+
+		public static TEnum ParseEnum<TEnum>(string value) where TEnum : struct, IComparable, IFormattable, IConvertible
+		{
+			TEnum tEnum;
+			if(Enum.TryParse(value, out tEnum))
+				return tEnum;
+			int i;
+			if(int.TryParse(value, out i) && Enum.IsDefined(typeof(TEnum), i))
+				tEnum = (TEnum)(object)i;
+			return tEnum;
 		}
 	}
 }

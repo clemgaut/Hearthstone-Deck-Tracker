@@ -91,8 +91,9 @@ namespace Hearthstone_Deck_Tracker.LogReader
 		{
 			Log.Debug("Stopping " + Info.Name);
 			_stop = true;
-			while(_running)
+			while(_running || _thread == null || _thread.ThreadState == ThreadState.Unstarted)
 				await Task.Delay(50);
+			_lines.Clear();
 			await Task.Factory.StartNew(() => _thread?.Join());
 			Log.Debug(Info.Name + " stopped.");
 		}
@@ -132,7 +133,7 @@ namespace Hearthstone_Deck_Tracker.LogReader
 							fs.Seek(_offset, SeekOrigin.Begin);
 							if(fs.Length == _offset)
 							{
-								Thread.Sleep(Config.Instance.UpdateDelay);
+								Thread.Sleep(LogReaderManager.UpdateDelay);
 								continue;
 							}
 							using(var sr = new StreamReader(fs))
@@ -145,7 +146,7 @@ namespace Hearthstone_Deck_Tracker.LogReader
 									if(!Info.HasFilters || (Info.StartsWithFilters?.Any(x => line.Substring(19).StartsWith(x)) ?? false)
 									   || (Info.ContainsFilters?.Any(x => line.Substring(19).Contains(x)) ?? false))
 									{
-										var logLine = new LogLineItem(Info.Name, line, fileInfo.LastWriteTime);
+										var logLine = new LogLineItem(Info.Name, line);
 										if(logLine.Time >= _startingPoint)
 											_lines.Add(logLine);
 									}
@@ -155,7 +156,7 @@ namespace Hearthstone_Deck_Tracker.LogReader
 						}
 					}
 				}
-				Thread.Sleep(Config.Instance.UpdateDelay);
+				Thread.Sleep(LogReaderManager.UpdateDelay);
 			}
 			_running = false;
 		}
@@ -189,7 +190,7 @@ namespace Hearthstone_Deck_Tracker.LogReader
 						{
 							if(string.IsNullOrWhiteSpace(lines[i].Trim('\0')))
 								continue;
-							var logLine = new LogLineItem(Info.Name, lines[i], fileInfo.LastWriteTime);
+							var logLine = new LogLineItem(Info.Name, lines[i]);
 							if(logLine.Time < _startingPoint)
 							{
 								var negativeOffset = lines.Take(i + 1).Sum(x => Encoding.UTF8.GetByteCount(x + Environment.NewLine));
@@ -237,7 +238,7 @@ namespace Hearthstone_Deck_Tracker.LogReader
 						if(targetOffset != -1)
 						{
 							var line = new string(reverse.Substring(targetOffset).TakeWhile(c => c != '\n').Reverse().ToArray());
-							return new LogLineItem("", line, fileInfo.LastWriteTime).Time;
+							return new LogLineItem("", line).Time;
 						}
 					}
 				}

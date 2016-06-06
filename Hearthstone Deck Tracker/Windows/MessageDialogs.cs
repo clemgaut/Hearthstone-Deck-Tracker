@@ -16,7 +16,6 @@ using Hearthstone_Deck_Tracker.Utility.Extensions;
 using Hearthstone_Deck_Tracker.Utility.Logging;
 using MahApps.Metro.Controls;
 using MahApps.Metro.Controls.Dialogs;
-using Microsoft.Win32;
 using static System.StringComparison;
 using static MahApps.Metro.Controls.Dialogs.MessageDialogStyle;
 
@@ -39,7 +38,17 @@ namespace Hearthstone_Deck_Tracker.Windows
 			var result = await window.ShowMessageAsync("Update successful", "", AffirmativeAndNegative,
 							new Settings {AffirmativeButtonText = "Show update notes", NegativeButtonText = "Close"});
 			if(result == MessageDialogResult.Affirmative)
-				Helper.TryOpenUrl(@"https://github.com/Epix37/Hearthstone-Deck-Tracker/releases");
+				Helper.TryOpenUrl(@"https://github.com/HearthSim/Hearthstone-Deck-Tracker/releases");
+		}
+
+		public static async void ShowRestartDialog()
+		{
+			var result =
+				await Core.MainWindow.ShowMessageAsync("Restart required.", "HDT needs to be restarted for the changes to take effect.",
+					MessageDialogStyle.AffirmativeAndNegative,
+					new MessageDialogs.Settings() { AffirmativeButtonText = "Restart Now", NegativeButtonText = "Later" });
+			if(result == MessageDialogResult.Affirmative)
+				Core.MainWindow.Restart();
 		}
 
 		public static async Task ShowMessage(this MetroWindow window, string title, string message) => await window.ShowMessageAsync(title, message);
@@ -78,42 +87,19 @@ namespace Hearthstone_Deck_Tracker.Windows
 		public static async Task<SaveScreenshotOperation> ShowScreenshotUploadSelectionDialog(this MainWindow window)
 		{
 			var result = await window.ShowMessageAsync("Select Operation", "\"upload\" will automatically upload the image to imgur.com",
-							AffirmativeAndNegativeAndSingleAuxiliary, new Settings
+							AffirmativeAndNegativeAndDoubleAuxiliary, new Settings
 							{
-								AffirmativeButtonText = "save only",
+								AffirmativeButtonText = "save",
 								NegativeButtonText = "save & upload",
-								FirstAuxiliaryButtonText = "upload only"
+								FirstAuxiliaryButtonText = "upload",
+								SecondAuxiliaryButtonText = "cancel"
 							});
 			return new SaveScreenshotOperation
 			{
+				Cancelled =  result == MessageDialogResult.SecondAuxiliary,
 				SaveLocal = result != MessageDialogResult.FirstAuxiliary,
 				Upload = result != MessageDialogResult.Affirmative
 			};
-		}
-
-		public static async Task ShowHsNotInstalledMessage(this MetroWindow window)
-		{
-			var settings = new Settings {AffirmativeButtonText = "Ok", NegativeButtonText = "Select manually"};
-			var result = await window.ShowMessageAsync("Hearthstone install directory not found",
-							"Hearthstone Deck Tracker will not work properly if Hearthstone is not installed on your machine (obviously).",
-							AffirmativeAndNegative, settings);
-			if(result == MessageDialogResult.Negative)
-			{
-				var dialog = new OpenFileDialog
-				{
-					Title = "Select Hearthstone.exe",
-					DefaultExt = "Hearthstone.exe",
-					Filter = "Hearthstone.exe|Hearthstone.exe"
-				};
-				var dialogResult = dialog.ShowDialog();
-
-				if(dialogResult == true)
-				{
-					Config.Instance.HearthstoneDirectory = Path.GetDirectoryName(dialog.FileName);
-					Config.Save();
-					Core.MainWindow.ShowMessage("Restart required.", "Please restart HDT for this to take effect.").Forget();
-				}
-			}
 		}
 
 		public static async Task ShowLogConfigUpdateFailedMessage(this MetroWindow window)
@@ -123,7 +109,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 										"New log.config settings are required for HDT to function correctly.\n\nTry starting HDT as administrator.\n\nIf that does not help, click \"show instructions\" to see how to update it manually.",
 										AffirmativeAndNegative, settings);
 			if(result == MessageDialogResult.Affirmative)
-				Helper.TryOpenUrl("https://github.com/Epix37/Hearthstone-Deck-Tracker/wiki/Setting-up-the-log.config");
+				Helper.TryOpenUrl("https://github.com/HearthSim/Hearthstone-Deck-Tracker/wiki/Setting-up-the-log.config");
 		}
 
 		public static async void ShowMissingCardsMessage(this MetroWindow window, Deck deck)
@@ -184,6 +170,15 @@ namespace Hearthstone_Deck_Tracker.Windows
 			return true;
 		}
 
+		public static async Task<DeckType?> ShowDeckTypeDialog(this MetroWindow window)
+		{
+			var dialog = new DeckTypeDialog();
+			await window.ShowMetroDialogAsync(dialog);
+			var type = await dialog.WaitForButtonPressAsync();
+			await window.HideMetroDialogAsync(dialog);
+			return type;
+		}
+
 		public static async Task<bool> ShowEditGameDialog(this MetroWindow window, GameStats game)
 		{
 			if(game == null)
@@ -237,6 +232,34 @@ namespace Hearthstone_Deck_Tracker.Windows
 			return english;
 		}
 
+		private static bool _awaitingMainWindowOpen;
+		public static async void ShowNewArenaDeckMessageAsync(this MetroWindow window, HearthMirror.Objects.Deck deck)
+		{
+			if(_awaitingMainWindowOpen)
+				return;
+			_awaitingMainWindowOpen = true;
+
+			if(window.WindowState == WindowState.Minimized)
+				Core.TrayIcon.ShowMessage("New arena deck detected!");
+
+			while(window.Visibility != Visibility.Visible || window.WindowState == WindowState.Minimized)
+				await Task.Delay(100);
+
+			var result = await window.ShowMessageAsync("New arena deck detected!",
+												 "You can change this behaviour to \"auto save&import\" or \"manual\" in [options > tracker > importing]",
+												 AffirmativeAndNegative, new Settings { AffirmativeButtonText = "Import", NegativeButtonText = "Cancel" });
+
+			if(result == MessageDialogResult.Affirmative)
+			{
+				Log.Info("...saving new arena deck.");
+				Core.MainWindow.ImportArenaDeck(deck);
+			}
+			else
+				Log.Info("...discarded by user.");
+			Core.Game.IgnoredArenaDecks.Add(deck.Id);
+			_awaitingMainWindowOpen = false;
+		}
+
 		public class Settings : MetroDialogSettings
 		{
 			public Settings()
@@ -248,6 +271,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 	public class SaveScreenshotOperation
 	{
+		public bool Cancelled { get; set; }
 		public bool SaveLocal { get; set; }
 		public bool Upload { get; set; }
 	}

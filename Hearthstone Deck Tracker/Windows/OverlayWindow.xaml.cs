@@ -28,9 +28,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 	// ReSharper disable once RedundantExtendsListEntry
 	public partial class OverlayWindow : Window, INotifyPropertyChanged
 	{
-		private const double RankCoveredMaxLeft = 0.1;
-		private const double PlayerRankCoveredMaxHeight = 0.8;
-		private const double OpponentRankCoveredMaxTop = 0.12;
+		private const int ChancePanelsMargins = 8;
 		private readonly Point[][] _cardMarkPos = new Point[MaxHandSize][];
 		private readonly List<CardMarker> _cardMarks = new List<CardMarker>();
 		private readonly int _customHeight;
@@ -44,8 +42,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 		private readonly List<Ellipse> _playerBoard = new List<Ellipse>();
 		private readonly List<Rectangle> _playerHand = new List<Rectangle>();
 		private bool? _isFriendsListOpen;
-		private DateTime _lastOpponentUpdateReqest = DateTime.MinValue;
-		private DateTime _lastPlayerUpdateReqest = DateTime.MinValue;
 		private string _lastToolTipCardId;
 		private bool _lmbDown;
 		private User32.MouseInput _mouseInput;
@@ -64,9 +60,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 			if(Config.Instance.ExtraFeatures && Config.Instance.ForceMouseHook)
 				HookMouse();
-
-			Scaling = 1.0;
-			OpponentScaling = 1.0;
 			ShowInTaskbar = Config.Instance.ShowInTaskbar;
 			if(Config.Instance.VisibleOverlay)
 				Background = (SolidColorBrush)new BrushConverter().ConvertFrom("#4C0000FF");
@@ -77,18 +70,39 @@ namespace Hearthstone_Deck_Tracker.Windows
 			if(Config.Instance.ShowBatteryLife)
 				EnableBatteryMonitor();
 			InitializeCollections();
+			GridMain.Visibility = Hidden;
+			if(User32.GetHearthstoneWindow() != IntPtr.Zero)
+				UpdatePosition();
+			Update(true);
 			UpdateScaling();
+			UpdatePlayerLayout();
+			UpdateOpponentLayout();
+			GridMain.Visibility = Visible;
 		}
 
 		private double ScreenRatio => (4.0 / 3.0) / (Width / Height);
 		public bool ForceHidden { get; set; }
-		public static double Scaling { get; set; }
-		public static double OpponentScaling { get; set; }
 		public Visibility WarningVisibility { get; set; }
-		public List<Card> PlayerDeck => _game.Player.DisplayCards;
-		public List<Card> OpponentDeck => _game.Opponent.DisplayRevealedCards;
+		public List<Card> PlayerDeck => _game.Player.PlayerCardList;
+		public List<Card> OpponentDeck => _game.Opponent.OpponentCardList;
 		public event PropertyChangedEventHandler PropertyChanged;
 
+		public double PlayerStackHeight => (Config.Instance.PlayerDeckHeight / 100 * Height) / (Config.Instance.OverlayPlayerScaling / 100);
+		public double PlayerListHeight => PlayerStackHeight - PlayerLabelsHeight;
+		public double PlayerLabelsHeight => CanvasPlayerChance.ActualHeight + CanvasPlayerCount.ActualHeight
+			+ LblPlayerFatigue.ActualHeight + LblDeckTitle.ActualHeight + LblWins.ActualHeight + ChancePanelsMargins;
+
+		public VerticalAlignment PlayerStackPanelAlignment
+			=> Config.Instance.OverlayCenterPlayerStackPanel ? VerticalAlignment.Center : VerticalAlignment.Top;
+
+		public double OpponentStackHeight => (Config.Instance.OpponentDeckHeight / 100 * Height) / (Config.Instance.OverlayOpponentScaling / 100);
+		public double OpponentListHeight => OpponentStackHeight - OpponentLabelsHeight;
+
+		public double OpponentLabelsHeight => CanvasOpponentChance.ActualHeight + CanvasOpponentCount.ActualHeight
+											+ LblOpponentFatigue.ActualHeight + LblWinRateAgainst.ActualHeight + ChancePanelsMargins;
+
+		public VerticalAlignment OpponentStackPanelAlignment
+			=> Config.Instance.OverlayCenterOpponentStackPanel ? VerticalAlignment.Center : VerticalAlignment.Top;
 
 		public void ShowOverlay(bool enable)
 		{
@@ -175,40 +189,10 @@ namespace Hearthstone_Deck_Tracker.Windows
 			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 		}
 
-		public bool IsRankConvered(bool requireOpponentRank = false)
-		{
-			if(Canvas.GetLeft(StackPanelPlayer) < RankCoveredMaxLeft * Width)
-			{
-				if(Canvas.GetTop(StackPanelPlayer) + StackPanelPlayer.ActualHeight > PlayerRankCoveredMaxHeight * Height)
-				{
-					Log.Info("Player rank is potentially covered by player deck.");
-					return true;
-				}
-				if(Canvas.GetTop(StackPanelPlayer) < OpponentRankCoveredMaxTop * Height)
-				{
-					Log.Info("Opponent rank is potentially covered by player deck.");
-					if(requireOpponentRank)
-						return true;
-				}
-			}
-			if(Canvas.GetLeft(StackPanelOpponent) < RankCoveredMaxLeft * Width)
-			{
-				if(Canvas.GetTop(StackPanelOpponent) + StackPanelOpponent.ActualHeight > PlayerRankCoveredMaxHeight * Height)
-				{
-					Log.Info("Player rank is potentially covered by opponent deck.");
-					return true;
-				}
-				if(Canvas.GetTop(StackPanelOpponent) < OpponentRankCoveredMaxTop * Height)
-				{
-					Log.Info("Opponent rank is potentially covered by opponent deck.");
-					if(requireOpponentRank)
-						return true;
-				}
-			}
-			Log.Info("No ranks should be covered by any decks.");
-			return false;
-		}
-
 		public void ShowFriendsListWarning(bool show) => StackPanelFriendsListWarning.Visibility = show ? Visible : Collapsed;
+
+		public void ShowRestartRequiredWarning() => TextBlockRestartWarning.Visibility = Visible;
+
+		public void HideRestartRequiredWarning() => TextBlockRestartWarning.Visibility = Collapsed;
 	}
 }

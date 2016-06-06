@@ -1,12 +1,13 @@
 ﻿#region
 
 using System;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using Hearthstone_Deck_Tracker.Enums;
+using System.Windows.Media.Animation;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Importing;
 using Hearthstone_Deck_Tracker.Utility;
@@ -15,6 +16,12 @@ using Hearthstone_Deck_Tracker.Utility.Logging;
 using MahApps.Metro.Controls.Dialogs;
 using Microsoft.Win32;
 using Point = System.Drawing.Point;
+using HearthDb.Enums;
+using HearthMirror;
+using Hearthstone_Deck_Tracker.Enums;
+using Hearthstone_Deck_Tracker.Enums.Hearthstone;
+using Hearthstone_Deck_Tracker.Importing.Game;
+using Deck = Hearthstone_Deck_Tracker.Hearthstone.Deck;
 
 #endregion
 
@@ -50,27 +57,18 @@ namespace Hearthstone_Deck_Tracker.Windows
 		private async Task<string> InputDeckURL()
 		{
 			var settings = new MessageDialogs.Settings();
-			var clipboard = Clipboard.ContainsText() ? Clipboard.GetText() : "";
-			var validUrls = new[]
+			var validUrls = DeckImporter.Websites.Keys.Select(x => x.Split('.')[0]).ToArray();
+			try
 			{
-				"hearthstats",
-				"hss.io",
-				"hearthpwn",
-				"hearthhead",
-				"hearthstoneplayers",
-				"tempostorm",
-				"hearthstonetopdeck",
-				"hearthnews.fr",
-				"arenavalue",
-				"hearthstone-decks",
-				"heartharena",
-				"hearthstoneheroes",
-				"elitedecks",
-				"icy-veins",
-				"hearthbuilder"
-			};
-			if(validUrls.Any(clipboard.Contains))
-				settings.DefaultText = clipboard;
+				var clipboard = Clipboard.ContainsText() ? new string(Clipboard.GetText().Take(1000).ToArray()) : "";
+				if(validUrls.Any(clipboard.Contains))
+					settings.DefaultText = clipboard;
+			}
+			catch(Exception e)
+			{
+				Log.Error(e);
+				return null;
+			}
 
 			if(Config.Instance.DisplayNetDeckAd)
 			{
@@ -269,51 +267,97 @@ namespace Hearthstone_Deck_Tracker.Windows
 			SetNewDeck(deck);
 		}
 
-		private async void BtnArena_Click(object sender, RoutedEventArgs e)
+		private void BtnArena_Click(object sender, RoutedEventArgs e) => StartArenaImporting().Forget();
+
+		public async Task StartArenaImporting()
 		{
-			if(Config.Instance.UseOldArenaImporting)
+			ProgressDialogController controller = null;
+			if(!Core.Game.IsRunning)
 			{
-				if(Config.Instance.ShowArenaImportMessage || Core.Game.PossibleArenaCards.Count < 10)
+				Log.Info("Waiting for game...");
+				var result = await this.ShowMessageAsync("Importing arena deck", "Start Hearthstone and enter the 'Arena' screen.",
+					MessageDialogStyle.AffirmativeAndNegative,
+					new MessageDialogs.Settings() {AffirmativeButtonText = "Start Hearthstone", NegativeButtonText = "Cancel"});
+				if(result == MessageDialogResult.Negative)
+					return;
+				Helper.StartHearthstoneAsync().Forget();
+				controller = await this.ShowProgressAsync("Importing arena deck", "Waiting for Hearthstone...", true);
+				while(!Core.Game.IsRunning)
 				{
-					await
-						this.ShowMessageAsync("How this works:",
-						                      "1) Build your arena deck (or enter the arena screen if you're done already)\n\n2) Leave the arena screen (go back to the main menu)\n\n3) Press \"IMPORT > FROM GAME: ARENA\"\n\n4) Adjust the numbers\n\nWhy the last step? Because this is not perfect. It is only detectable which cards are in the deck but NOT how many of each. You can increase the count of a card by just right clicking it.\n\nYou can see this information again in 'options > tracker > importing'");
-
-					if(Config.Instance.ShowArenaImportMessage)
+					if(controller.IsCanceled)
 					{
-						Config.Instance.ShowArenaImportMessage = false;
-						Config.Save();
-					}
-					if(Core.Game.PossibleArenaCards.Count < 10)
+						await controller.CloseAsync();
 						return;
+					}
+					await Task.Delay(500);
 				}
-
-				var deck = new Deck {IsArenaDeck = true};
-				foreach(var card in Core.Game.PossibleArenaCards.OrderBy(x => x.Cost).ThenBy(x => x.Type).ThenBy(x => x.LocalizedName))
-				{
-					deck.Cards.Add(card);
-					if(deck.Class == null && card.GetPlayerClass != "Neutral")
-						deck.Class = card.GetPlayerClass;
-				}
-				deck.Name = Helper.ParseDeckNameTemplate(Config.Instance.ArenaDeckNameTemplate, deck);
-				if(Config.Instance.DeckImportAutoDetectCardCount)
-				{
-					await
-						this.ShowMessageAsync("Arena cards found!",
-						                      "[WORK IN PROGRESS] Please enter the arena screen, then click ok. Wait until HDT has loaded the deck.\n\nPlease don't move your mouse.\n\nNote: For right now, this can currently only detect if a card has 1 or more than 1 copy (sets count to 2). Cards with more than 2 copies still have to be manually adjusted.");
-					var controller = await this.ShowProgressAsync("Please wait...", "Detecting card counts...");
-					await GetCardCounts(deck);
-					await controller.CloseAsync();
-				}
-				SetNewDeck(deck);
 			}
-			else
+			if(Core.Game.CurrentMode != Mode.DRAFT)
 			{
-				if(!Core.Game.TempArenaDeck.Cards.Any())
-					await this.ShowMessageAsync("No arena deck found", "Please enter the arena screen (and build your deck).");
-				else
-					SetNewDeck(Core.Game.TempArenaDeck);
+				if(controller == null)
+					controller = await this.ShowProgressAsync("Importing arena deck", "", true);
+				controller.SetMessage("Enter the 'Arena' screen.");
+				Log.Info("Waiting for DRAFT screen...");
+				while(Core.Game.CurrentMode != Mode.DRAFT)
+				{
+					if(controller.IsCanceled)
+					{
+						await controller.CloseAsync();
+						return;
+					}
+					await Task.Delay(500);
+				}
 			}
+			var deck = DeckImporter.FromArena()?.Deck;
+			while(deck == null || deck.Cards.Sum(x => x.Count) < 30)
+			{
+				if(controller == null)
+					controller = await this.ShowProgressAsync("Importing arena deck", "", true);
+				if(controller.IsCanceled)
+				{
+					await controller.CloseAsync();
+					return;
+				}
+				controller.SetMessage($"Waiting for complete deck ({deck?.Cards.Sum(x => x.Count) ?? 0}/30 cards)...");
+				await Task.Delay(1000);
+				deck = DeckImporter.FromArena(false)?.Deck;
+			}
+			if(controller != null)
+				await controller.CloseAsync();
+			var recentArenaDecks = DeckList.Instance.Decks.Where(d => d.IsArenaDeck && d.Cards.Sum(x => x.Count) == 30).OrderByDescending(d => d.LastPlayedNewFirst).Take(15);
+			var existing = recentArenaDecks.FirstOrDefault(d => d.Cards.All(c => deck.Cards.Any(c2 => c.Id == c2.Id && c.Count == c2.Count)));
+			if(existing != null)
+			{
+				var result = await this.ShowMessageAsync("Deck already exists", "You seem to already have this deck.",
+					MessageDialogStyle.AffirmativeAndNegative,
+					new MessageDialogs.Settings() { AffirmativeButtonText = "Use existing", NegativeButtonText = "Import anyway" });
+				if(result == MessageDialogResult.Affirmative)
+				{
+					SelectDeck(existing, true);
+					return;
+				}
+			}
+			ImportArenaDeck(deck);
+		}
+
+		public void ImportArenaDeck(HearthMirror.Objects.Deck deck)
+		{
+			var arenaDeck = new Deck {
+				Class = Database.GetCardFromId(deck.Hero).PlayerClass,
+				HsId = deck.Id,
+				Cards = new ObservableCollection<Card>(deck.Cards.Select(x =>
+				{
+					var card = Database.GetCardFromId(x.Id);
+					card.Count = x.Count;
+					return card;
+				})),
+				LastEdited = DateTime.Now,
+				IsArenaDeck = true
+			};
+			arenaDeck.Name = Helper.ParseDeckNameTemplate(Config.Instance.ArenaDeckNameTemplate, arenaDeck);
+			DeckList.Instance.Decks.Add(arenaDeck);
+			DeckPickerList.UpdateDecks();
+			SelectDeck(arenaDeck, true);
 		}
 
 		public async Task GetCardCounts(Deck deck)
@@ -425,58 +469,31 @@ namespace Hearthstone_Deck_Tracker.Windows
 			ActivateWindow();
 		}
 
-		private void BtnConstructed_Click(object sender, RoutedEventArgs e) => ImportConstructedDeck().Forget();
+		private void BtnConstructed_Click(object sender, RoutedEventArgs e) => ShowImportDialog(false);
 
-		public async Task ImportConstructedDeck()
+		private void BtnBrawl_Click(object sender, RoutedEventArgs e) => ShowImportDialog(true);
+
+		internal async void ShowImportDialog(bool brawl)
 		{
-			if(Config.Instance.ShowConstructedImportMessage || Core.Game.PossibleConstructedCards.Count < 10)
+			DeckImportingFlyout.Reset(brawl);
+			FlyoutDeckImporting.IsOpen = true;
+			if(!Core.Game.IsRunning)
 			{
-				if(Config.Instance.ShowConstructedImportMessage)
-				{
-					var result =
-						await
-						this.ShowMessageAsync("Setting up",
-						                      "This functionality requires a quick semi-automatic setup. HDT needs to know whichs cards on the first page for each class exist as golden and normal.\n\nYou may have to run the setup again if those cards change: 'options > tracker > importing'",
-						                      MessageDialogStyle.AffirmativeAndNegative,
-						                      new MessageDialogs.Settings {AffirmativeButtonText = "start", NegativeButtonText = "cancel"});
-					if(result != MessageDialogResult.Affirmative)
-						return;
-					await Helper.SetupConstructedImporting(Core.Game);
-					Config.Instance.ShowConstructedImportMessage = false;
-					Config.Save();
-				}
-				await
-					this.ShowMessageAsync("How this works:",
-					                      "0) Build your deck\n\n1) Go to the main menu (always start from here)\n\n2) Open \"My Collection\" and open the deck you want to import (do not edit the deck at this point)\n\n3) Go straight back to the main menu\n\n4) Press \"IMPORT > FROM GAME: CONSTRUCTED\"\n\n5) Adjust the numbers\n\nWhy the last step? Because this is not perfect. It is only detectable which cards are in the deck but NOT how many of each. Depening on what requires less clicks, non-legendary cards will default to 1 or 2. There may issues importing druid cards that exist as normal and golden on your first page.\n\nYou can see this information again in 'options > tracker > importing'");
-				if(Core.Game.PossibleConstructedCards.Count(c => c.PlayerClass == "Druid" || c.PlayerClass == null) < 10
-				   && Core.Game.PossibleConstructedCards.Count(c => c.PlayerClass != "Druid") < 10)
-					return;
+				Log.Info("Waiting for game...");
+				while(!Core.Game.IsRunning)
+					await Task.Delay(500);
 			}
-
-
-			var deck = new Deck();
-			var lastNonNeutralCard = Core.Game.PossibleConstructedCards.LastOrDefault(c => !string.IsNullOrEmpty(c.PlayerClass));
-			if(lastNonNeutralCard == null)
-				return;
-			deck.Class = lastNonNeutralCard.PlayerClass;
-
-			var legendary = Core.Game.PossibleConstructedCards.Where(c => c.Rarity == Rarity.Legendary).ToList();
-			var remaining =
-				Core.Game.PossibleConstructedCards.Where(
-				                                         c =>
-				                                         c.Rarity != Rarity.Legendary
-				                                         && (string.IsNullOrEmpty(c.PlayerClass) || c.PlayerClass == deck.Class)).ToList();
-			var count = Math.Abs(30 - (2 * remaining.Count + legendary.Count)) < Math.Abs(30 - (remaining.Count + legendary.Count)) ? 2 : 1;
-			foreach(var card in Core.Game.PossibleConstructedCards)
+			DeckImportingFlyout.StartedGame();
+			var mode = brawl ? Mode.TAVERN_BRAWL : Mode.TOURNAMENT;
+			if(Core.Game.CurrentMode != mode)
 			{
-				if(!string.IsNullOrEmpty(card.PlayerClass) && card.PlayerClass != deck.Class)
-					continue;
-				card.Count = card.Rarity == Rarity.Legendary ? 1 : count;
-				deck.Cards.Add(card);
-				if(deck.Class == null && card.GetPlayerClass != "Neutral")
-					deck.Class = card.GetPlayerClass;
+				Log.Info($"Waiting for {mode} screen...");
+				while(Core.Game.CurrentMode != mode)
+					await Task.Delay(500);
 			}
-			SetNewDeck(deck);
+			var decks = brawl ? DeckImporter.FromBrawl() : DeckImporter.FromConstructed();
+			DeckImportingFlyout.SetDecks(decks);
+			Core.MainWindow.ActivateWindow();
 		}
 	}
 }

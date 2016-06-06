@@ -139,7 +139,7 @@ namespace Hearthstone_Deck_Tracker
 			}
 			else
 			{
-				if(!fastOnly)
+				if(!fastOnly && Game.OpponentMinionCount < 7)
 					SetZeroOlder(CardIds.Secrets.Hunter.SnakeTrap, stopIndex);
 
 				if(attacker.IsMinion)
@@ -190,7 +190,11 @@ namespace Hearthstone_Deck_Tracker
 				foreach(var possible in secret.PossibleSecrets)
 				{
 					if(possible.Value)
-						returnThis.Find(x => x.CardId == possible.Key).Count++;
+					{
+						var s = returnThis.FirstOrDefault(x => x.CardId == possible.Key);
+						if(s != null)
+							s.Count++;
+					}
 				}
 			}
 

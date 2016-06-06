@@ -32,16 +32,15 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 		public void Load(GameV2 game)
 		{
 			_game = game;
-			ComboboxArenaImportingBehaviour.IsEnabled = !Config.Instance.UseOldArenaImporting;
 			ComboboxArenaImportingBehaviour.ItemsSource = Enum.GetValues(typeof(ArenaImportingBehaviour));
 			if(Config.Instance.SelectedArenaImportingBehaviour.HasValue)
 				ComboboxArenaImportingBehaviour.SelectedItem = Config.Instance.SelectedArenaImportingBehaviour.Value;
-			CheckboxUseOldArenaImporting.IsChecked = Config.Instance.UseOldArenaImporting;
-			BtnArenaHowTo.IsEnabled = Config.Instance.UseOldArenaImporting;
 			CheckboxTagOnImport.IsChecked = Config.Instance.TagDecksOnImport;
 			CheckboxImportNetDeck.IsChecked = Config.Instance.NetDeckClipboardCheck ?? false;
 			CheckboxAutoSaveOnImport.IsChecked = Config.Instance.AutoSaveOnImport;
 			TextBoxArenaTemplate.Text = Config.Instance.ArenaDeckNameTemplate;
+			CheckBoxConstructedImportNew.IsChecked = Config.Instance.ConstructedAutoImportNew;
+			CheckBoxConstrucedUpdate.IsChecked = Config.Instance.ConstructedAutoUpdate;
 			_initialized = true;
 		}
 
@@ -93,25 +92,6 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 			Config.Save();
 		}
 
-		private async void ButtonArenaHowTo_OnClick(object sender, RoutedEventArgs e)
-		{
-			await
-				Core.MainWindow.ShowMessageAsync("How this works:",
-				                                 "1) Build your arena deck (or enter the arena screen if you're done already)\n\n2) Leave the arena screen (go back to the main menu)\n\n3) Press \"IMPORT > FROM GAME: ARENA\"\n\n4) Adjust the numbers\n\nWhy the last step? Because this is not perfect. It is only detectable which cards are in the deck but NOT how many of each. You can increase the count of a card by just right clicking it.");
-		}
-
-		private async void ButtonConstructedHowTo_OnClick(object sender, RoutedEventArgs e)
-		{
-			await
-				Core.MainWindow.ShowMessageAsync("How this works:",
-				                                 "0) Build your deck\n\n1) Go to the main menu (always start from here!)\n\n2)Enter the collection and open the deck you want to import (do not edit the deck at this point)\n\n3)Leave the collection screen and go back to the main menu\n\n4) Press \"IMPORT > FROM GAME: CONSTRUCTED\"\n\n5) Adjust the numbers\n\nWhy the last step? Because this is not perfect. It is only detectable which cards are in the deck but NOT how many of each. Depening on what requires less clicks, non-legendary cards will default to 1 or 2.");
-		}
-
-		private void ButtonSetUpConstructed_OnClick(object sender, RoutedEventArgs e)
-		{
-			Helper.SetupConstructedImporting(_game).Forget();
-		}
-
 		private void BtnEditTemplate_Click(object sender, RoutedEventArgs e)
 		{
 			if(TextBoxArenaTemplate.IsEnabled)
@@ -131,33 +111,6 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 		private void TextBoxArenaTemplate_OnTextChanged(object sender, TextChangedEventArgs e) 
 			=> TextBlockNamePreview.Text = Helper.ParseDeckNameTemplate(TextBoxArenaTemplate.Text, new Deck() {Class = "ClassName"});
 
-		private void ButtonActivateHdtProtocol_OnClick(object sender, RoutedEventArgs e)
-		{
-			Core.MainWindow.SetupProtocol().Forget();
-		}
-
-		private void CheckboxUseOldArenaImporting_OnChecked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.UseOldArenaImporting = true;
-			ComboboxArenaImportingBehaviour.IsEnabled = false;
-			ComboboxArenaImportingBehaviour.SelectedIndex = -1;
-			BtnArenaHowTo.IsEnabled = true;
-			Config.Save();
-		}
-
-		private void CheckboxUseOldArenaImporting_OnUnchecked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.UseOldArenaImporting = false;
-			ComboboxArenaImportingBehaviour.IsEnabled = true;
-			ComboboxArenaImportingBehaviour.SelectedItem = ArenaImportingBehaviour.AutoAsk;
-			BtnArenaHowTo.IsEnabled = false;
-			Config.Save();
-		}
-
 		private void ComboboxArenaImportingBehaviour_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
 			if(!_initialized)
@@ -168,6 +121,38 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Tracker
 				Config.Instance.SelectedArenaImportingBehaviour = selected;
 				Config.Save();
 			}
+		}
+
+		private void CheckBoxConstructedImportNew_Checked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.ConstructedAutoImportNew = true;
+			Config.Save();
+		}
+
+		private void CheckBoxConstructedImportNew_Unchecked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.ConstructedAutoImportNew = false;
+			Config.Save();
+		}
+
+		private void CheckBoxConstrucedUpdate_Checked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.ConstructedAutoUpdate= true;
+			Config.Save();
+		}
+
+		private void CheckBoxConstrucedUpdate_Unchecked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.ConstructedAutoUpdate = false;
+			Config.Save();
 		}
 	}
 }

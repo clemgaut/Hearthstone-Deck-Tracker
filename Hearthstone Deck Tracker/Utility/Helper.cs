@@ -9,15 +9,18 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using HearthDb.Enums;
 using Hearthstone_Deck_Tracker.Controls;
 using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.FlyoutControls;
@@ -30,6 +33,7 @@ using MahApps.Metro;
 using MahApps.Metro.Controls;
 using MahApps.Metro.Controls.Dialogs;
 using Microsoft.Win32;
+using Newtonsoft.Json;
 using Application = System.Windows.Application;
 using Card = Hearthstone_Deck_Tracker.Hearthstone.Card;
 using Color = System.Drawing.Color;
@@ -48,7 +52,7 @@ namespace Hearthstone_Deck_Tracker
 
 		public static readonly string[] EventKeys = {"None", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"};
 
-        public static readonly Dictionary<string, string> LanguageDict = new Dictionary<string, string>
+		public static readonly Dictionary<string, string> LanguageDict = new Dictionary<string, string>
 		{
 			{"English", "enUS"},
 			{"Chinese (China)", "zhCN"},
@@ -63,7 +67,8 @@ namespace Hearthstone_Deck_Tracker
 			{"Portuguese (Brazil)", "ptBR"},
 			{"Russian", "ruRU"},
 			{"Spanish (Mexico)", "esMX"},
-			{"Spanish (Spain)", "esES"}
+			{"Spanish (Spain)", "esES"},
+			{"Thai", "thTH"}
 		};
 
 		public static readonly List<string> LatinLanguages = new List<string>
@@ -77,6 +82,8 @@ namespace Hearthstone_Deck_Tracker
 			"esMX",
 			"esES"
 		};
+
+		public static string[] WildOnlySets = new[] { CardSet.FP1, CardSet.PE1, CardSet.PROMO, CardSet.REWARD }.Select(HearthDbConverter.SetConverter).ToArray();
 
 		private static Version _currentVersion;
 
@@ -124,29 +131,21 @@ namespace Hearthstone_Deck_Tracker
 		public static bool SettingUpConstructedImporting { get; set; }
 
 		public static bool HearthstoneDirExists
-				{
+		{
 			get
 			{
 				if(!_hearthstoneDirExists.HasValue)
 					_hearthstoneDirExists = FindHearthstoneDir();
 				return _hearthstoneDirExists.Value;
-				}
 			}
+		}
+
+		public static int CurrentSeason => (DateTime.Now.Year - 2014) * 12 - 3 + DateTime.Now.Month;
+		public static WindowState GameWindowState { get; internal set; } = WindowState.Normal;
 
 		// A bug in the SerializableVersion.ToString() method causes this to load Version.xml incorrectly.
 		// The build and revision numbers are swapped (i.e. a Revision of 21 in Version.xml loads to Version.Build == 21).
-		public static Version GetCurrentVersion()
-		{
-			try
-			{
-				return _currentVersion ?? (_currentVersion = new Version(XmlManager<SerializableVersion>.Load("Version.xml").ToString()));
-			}
-			catch(Exception e)
-			{
-				Log.Error(e);
-				return null;
-			}
-		}
+		public static Version GetCurrentVersion() => Assembly.GetExecutingAssembly().GetName().Version;
 
 		public static bool IsNumeric(char c)
 		{
@@ -171,12 +170,12 @@ namespace Hearthstone_Deck_Tracker
 			return result;
 		}
 
-		public static PngBitmapEncoder ScreenshotDeck(DeckListView dlv, double dpiX, double dpiY, string name)
+		public static PngBitmapEncoder ScreenshotDeck(FrameworkElement element, double dpiX, double dpiY, string name)
 		{
 			try
 			{
-				var rtb = new RenderTargetBitmap((int)dlv.ActualWidth, (int)dlv.ActualHeight, dpiX, dpiY, PixelFormats.Pbgra32);
-				rtb.Render(dlv);
+				var rtb = new RenderTargetBitmap((int)element.ActualWidth, (int)element.ActualHeight, dpiX, dpiY, PixelFormats.Pbgra32);
+				rtb.Render(element);
 
 				var encoder = new PngBitmapEncoder();
 				encoder.Frames.Add(BitmapFrame.Create(rtb));
@@ -287,18 +286,18 @@ namespace Hearthstone_Deck_Tracker
 				{
 					if(!IsYellowPixel(capture.GetPixel(x, y)))
 						continue;
-						var foundFriendsList = true;
+					var foundFriendsList = true;
 
-						//check for a straight yellow line (left side of add button)
-						for(var i = 0; i < 5; i++)
-						{
-							if(x + i >= capture.Width || !IsYellowPixel(capture.GetPixel(x + i, y)))
-								foundFriendsList = false;
-						}
-						if(foundFriendsList)
-							return true;
-						}
+					//check for a straight yellow line (left side of add button)
+					for(var i = 0; i < 5; i++)
+					{
+						if(x + i >= capture.Width || !IsYellowPixel(capture.GetPixel(x + i, y)))
+							foundFriendsList = false;
 					}
+					if(foundFriendsList)
+						return true;
+				}
+			}
 			return false;
 		}
 
@@ -313,23 +312,16 @@ namespace Hearthstone_Deck_Tracker
 
 		public static void UpdateEverything(GameV2 game)
 		{
-			if(Core.Overlay.IsVisible)
-                Core.Overlay.Update(false);
+			if(Core.Overlay.IsVisible || Core.Windows.CapturableOverlay != null)
+				Core.Overlay.Update(false);
 
+			var gameStarted = !game.IsInMenu && game.Entities.Count >= 67;
 			if(Core.Windows.PlayerWindow.IsVisible)
-                Core.Windows.PlayerWindow.SetCardCount(game.Player.HandCount, game.Player.DeckCount);
+				Core.Windows.PlayerWindow.SetCardCount(game.Player.HandCount, !gameStarted ? 30 : game.Player.DeckCount);
 
 			if(Core.Windows.OpponentWindow.IsVisible)
-                Core.Windows.OpponentWindow.SetOpponentCardCount(game.Opponent.HandCount, game.Opponent.DeckCount, game.Opponent.HasCoin);
-
-
-			if(Core.MainWindow.NeedToIncorrectDeckMessage && !Core.MainWindow.IsShowingIncorrectDeckMessage
-			   && game.CurrentGameMode != GameMode.Spectator && game.IgnoreIncorrectDeck != DeckList.Instance.ActiveDeck)
-			{
-				Core.MainWindow.IsShowingIncorrectDeckMessage = true;
-				Core.MainWindow.ShowIncorrectDeckMessage();
+				Core.Windows.OpponentWindow.SetOpponentCardCount(game.Opponent.HandCount, !gameStarted ? 30 : game.Opponent.DeckCount, game.Opponent.HasCoin);
 			}
-		}
 
 		//http://stackoverflow.com/questions/23927702/move-a-folder-from-one-drive-to-another-in-c-sharp
 		public static void CopyFolder(string sourceFolder, string destFolder)
@@ -396,22 +388,6 @@ namespace Hearthstone_Deck_Tracker
 			return long.TryParse(unixTime, out time) ? FromUnixTime(time) : DateTime.Now;
 		}
 
-		public static async Task SetupConstructedImporting(GameV2 game)
-		{
-			var settings = new MessageDialogs.Settings {AffirmativeButtonText = "continue"};
-			if(!game.IsRunning)
-				await Core.MainWindow.ShowMessageAsync("Step 0:", "Start Hearthstone", settings: settings);
-			await Core.MainWindow.ShowMessageAsync("Step 1:", "Go to the main menu", settings: settings);
-			SettingUpConstructedImporting = true;
-			await
-				Core.MainWindow.ShowMessageAsync("Step 2:",
-				                            "Open \"My Collection\" and click each class icon at the top once.\n\n- Do not click on neutral\n- Do not open any decks\n- Do not flip the pages.",
-				                            settings: new MessageDialogs.Settings {AffirmativeButtonText = "done"});
-			Config.Instance.ConstructedImportingIgnoreCachedIds = game.PossibleConstructedCards.Select(c => c.Id).ToArray();
-			Config.Save();
-			SettingUpConstructedImporting = false;
-		}
-
 		public static Rectangle GetHearthstoneRect(bool dpiScaling) => User32.GetHearthstoneRect(dpiScaling);
 
 		public static string ParseDeckNameTemplate(string template) => ParseDeckNameTemplate(template, null);
@@ -440,224 +416,218 @@ namespace Hearthstone_Deck_Tracker
 			}
 		}
 
-		public static void UpdatePlayerCards()
+		public static async Task StartHearthstoneAsync()
 		{
-			Core.Overlay.UpdatePlayerCards();
-			Core.Windows.PlayerWindow.UpdatePlayerCards();
-		}
-
-		public static void UpdateOpponentCards()
-		{
-			Core.Overlay.UpdateOpponentCards();
-			Core.Windows.OpponentWindow.UpdateOpponentCards();
-		}
-
-        public static async Task StartHearthstoneAsync()
-        {
-            if(User32.GetHearthstoneWindow() != IntPtr.Zero)
-                return;
-            Core.MainWindow.BtnStartHearthstone.IsEnabled = false;
+			if(User32.GetHearthstoneWindow() != IntPtr.Zero)
+				return;
+			Core.MainWindow.BtnStartHearthstone.IsEnabled = false;
 			var useNoDeckMenuItem = Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems.IndexOfKey("startHearthstone");
-            Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Enabled = false;
-            try
-            {
-                var bnetProc = Process.GetProcessesByName("Battle.net").FirstOrDefault();
-                if(bnetProc == null)
-                {
-                    Process.Start("battlenet://");
+			Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Enabled = false;
+			try
+			{
+				var bnetProc = Process.GetProcessesByName("Battle.net").FirstOrDefault();
+				if(bnetProc == null)
+				{
+					Process.Start("battlenet://");
 
-                    var foundBnetWindow = false;
-                    Core.MainWindow.TextBlockBtnStartHearthstone.Text = "STARTING LAUNCHER...";
+					var foundBnetWindow = false;
+					Core.MainWindow.TextBlockBtnStartHearthstone.Text = "STARTING LAUNCHER...";
 					for(var i = 0; i < 20; i++)
-                    {
-                        bnetProc = Process.GetProcessesByName("Battle.net").FirstOrDefault();
-                        if(bnetProc != null && bnetProc.MainWindowHandle != IntPtr.Zero)
-                        {
-                            foundBnetWindow = true;
-                            break;
-                        }
-                        await Task.Delay(500);
-                    }
-                    Core.MainWindow.TextBlockBtnStartHearthstone.Text = "START LAUNCHER / HEARTHSTONE";
-                    if(!foundBnetWindow)
-                    {
+					{
+						bnetProc = Process.GetProcessesByName("Battle.net").FirstOrDefault();
+						if(bnetProc != null && bnetProc.MainWindowHandle != IntPtr.Zero)
+						{
+							foundBnetWindow = true;
+							break;
+						}
+						await Task.Delay(500);
+					}
+					Core.MainWindow.TextBlockBtnStartHearthstone.Text = "START LAUNCHER / HEARTHSTONE";
+					if(!foundBnetWindow)
+					{
 						Core.MainWindow.ShowMessageAsync("Error starting battle.net launcher", "Could not find or start the battle.net launcher.").Forget();
-                        Core.MainWindow.BtnStartHearthstone.IsEnabled = true;
-                        return;
-                    }
-                }
-                await Task.Delay(2000); //just to make sure
-                Process.Start("battlenet://WTCG");
-            }
-            catch(Exception ex)
-            {
+						Core.MainWindow.BtnStartHearthstone.IsEnabled = true;
+						return;
+					}
+				}
+				await Task.Delay(2000); //just to make sure
+				Process.Start("battlenet://WTCG");
+			}
+			catch(Exception ex)
+			{
 				Log.Error(ex);
-            }
+			}
 
-            Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Enabled = true;
-            Core.MainWindow.BtnStartHearthstone.IsEnabled = true;
-        }
+			Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Enabled = true;
+			Core.MainWindow.BtnStartHearthstone.IsEnabled = true;
+		}
 
-        public static Region GetCurrentRegion()
-        {
-            try
-            {
-                var regex = new Regex(@"AccountListener.OnAccountLevelInfoUpdated.*currentRegion=(?<region>(\d))");
-                var conLogPath = Path.Combine(Config.Instance.HearthstoneDirectory, "ConnectLog.txt");
-                using(var fs = new FileStream(conLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using(var reader = new StreamReader(fs))
-                {
-					var lines = reader.ReadToEnd().Split(new[] {Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries);
-                    foreach(var line in lines)
-                    {
-                        var match = regex.Match(line);
-						if(!match.Success)
-							continue;
-                            Region region;
-                            if(Enum.TryParse(match.Groups["region"].Value, out region))
-                            {
-							Log.Info("Current region: " + region);
-                                return region;
-                            }
-                        }
-                    }
-                }
-            catch(Exception ex)
-            {
+		public static Region GetCurrentRegion()
+		{
+			try
+			{
+				var bnetAppData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Battle.net");
+				var files = new DirectoryInfo(bnetAppData).GetFiles();
+				var config = files.OrderByDescending(x => x.LastWriteTime).FirstOrDefault(x => Regex.IsMatch(x.Name, @"\w{8}\.config"));
+				if(config == null)
+					return Region.UNKNOWN;
+				string content;
+				using(var fs = new FileStream(config.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+				using(var reader = new StreamReader(fs))
+					content = reader.ReadToEnd();
+				dynamic json = JsonConvert.DeserializeObject(content);
+				switch((string)json.User.Client.PlayScreen.GameFamily.WTCG.LastSelectedGameRegion)
+				{
+					case "EU":
+						return Region.EU;
+					case "US":
+						return Region.US;
+					case "KR":
+						return Region.ASIA;
+					case "CN":
+						return Region.CHINA;
+					default:
+						return Region.UNKNOWN;
+				}
+			}
+			catch(Exception ex)
+			{
 				Log.Error(ex);
-            }
-            return Region.UNKNOWN;
-        }
+			}
+			return Region.UNKNOWN;
+		}
 
-	    private static bool FindHearthstoneDir()
-        {
-            if(string.IsNullOrEmpty(Config.Instance.HearthstoneDirectory)
-               || !File.Exists(Config.Instance.HearthstoneDirectory + @"\Hearthstone.exe"))
-            {
-                using(var hsDirKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Hearthstone"))
-                {
+		private static bool FindHearthstoneDir()
+		{
+			if(string.IsNullOrEmpty(Config.Instance.HearthstoneDirectory)
+			   || !File.Exists(Config.Instance.HearthstoneDirectory + @"\Hearthstone.exe"))
+			{
+				using(var hsDirKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Hearthstone"))
+				{
 					if(hsDirKey == null)
 						return false;
-                        var hsDir = (string)hsDirKey.GetValue("InstallLocation");
+					var hsDir = (string)hsDirKey.GetValue("InstallLocation");
 
-                        //verify the install location actually is correct (possibly moved?)
+					//verify the install location actually is correct (possibly moved?)
 					if(!File.Exists(hsDir + @"\Hearthstone.exe"))
 						return false;
-                            Config.Instance.HearthstoneDirectory = hsDir;
-                            Config.Save();
-                }
-            }
+					Config.Instance.HearthstoneDirectory = hsDir;
+					Config.Save();
+				}
+			}
 			return true;
-        }
+		}
 
-        public static Deck ParseCardString(string cards, bool localizedNames = false)
-        {
-            try
-            {
-                var deck = new Deck();
-                var lines = cards.Split('\n');
-                foreach(var line in lines)
-                {
-                    var count = 1;
-                    var cardName = line.Trim();
-                    Match match = null;
+		public static Deck ParseCardString(string cards, bool localizedNames = false)
+		{
+			try
+			{
+				var deck = new Deck();
+				var lines = cards.Split('\n');
+				foreach(var line in lines)
+				{
+					var count = 1;
+					var cardName = line.Trim();
+					Match match = null;
 					if(CardLineRegexCountFirst.IsMatch(cardName))
 						match = CardLineRegexCountFirst.Match(cardName);
 					else if(CardLineRegexCountLast.IsMatch(cardName))
 						match = CardLineRegexCountLast.Match(cardName);
 					else if(CardLineRegexCountLast2.IsMatch(cardName))
 						match = CardLineRegexCountLast2.Match(cardName);
-                    if(match != null)
-                    {
-                        var tmpCount = match.Groups["count"];
-                        if(tmpCount.Success)
-                            count = int.Parse(tmpCount.Value);
-                        cardName = match.Groups["cardname"].Value.Trim();
-                    }
+					if(match != null)
+					{
+						var tmpCount = match.Groups["count"];
+						if(tmpCount.Success)
+							count = int.Parse(tmpCount.Value);
+						cardName = match.Groups["cardname"].Value.Trim();
+					}
 
-                    var card = Database.GetCardFromName(cardName, localizedNames);
+					var card = Database.GetCardFromName(cardName, localizedNames);
 					if(string.IsNullOrEmpty(card?.Name))
-                        continue;
-                    card.Count = count;
+						continue;
+					card.Count = count;
 
-                    if(string.IsNullOrEmpty(deck.Class) && card.PlayerClass != "Neutral")
-                        deck.Class = card.PlayerClass;
+					if(string.IsNullOrEmpty(deck.Class) && card.PlayerClass != "Neutral")
+						deck.Class = card.PlayerClass;
 
-                    if(deck.Cards.Contains(card))
-                    {
-                        var deckCard = deck.Cards.First(c => c.Equals(card));
-                        deck.Cards.Remove(deckCard);
-                        deckCard.Count += count;
-                        deck.Cards.Add(deckCard);
-                    }
-                    else
-                        deck.Cards.Add(card);
-                }
-                return deck;
-            }
-            catch(Exception ex)
-            {
+					if(deck.Cards.Contains(card))
+					{
+						var deckCard = deck.Cards.First(c => c.Equals(card));
+						deck.Cards.Remove(deckCard);
+						deckCard.Count += count;
+						deck.Cards.Add(deckCard);
+					}
+					else
+						deck.Cards.Add(card);
+				}
+				return deck;
+			}
+			catch(Exception ex)
+			{
 				Log.Error(ex);
-                return null;
-            }
-        }
+				return null;
+			}
+		}
 
 
-        public static void CopyReplayFiles()
-        {
-            if(Config.Instance.SaveDataInAppData == null)
-                return;
-            var appDataReplayDirPath = Config.AppDataPath + @"\Replays";
-            var dataReplayDirPath = Config.Instance.DataDirPath + @"\Replays";
-            if(Config.Instance.SaveDataInAppData.Value)
-            {
-                if(Directory.Exists(dataReplayDirPath))
-                {
-                    //backup in case the file already exists
-                    var time = DateTime.Now.ToFileTime();
-                    if(Directory.Exists(appDataReplayDirPath))
-                    {
-                        CopyFolder(appDataReplayDirPath, appDataReplayDirPath + time);
-                        Directory.Delete(appDataReplayDirPath, true);
+		public static void CopyReplayFiles()
+		{
+			if(Config.Instance.SaveDataInAppData == null)
+				return;
+			var appDataReplayDirPath = Config.AppDataPath + @"\Replays";
+			var dataReplayDirPath = Config.Instance.DataDirPath + @"\Replays";
+			if(Config.Instance.SaveDataInAppData.Value)
+			{
+				if(Directory.Exists(dataReplayDirPath))
+				{
+					//backup in case the file already exists
+					var time = DateTime.Now.ToFileTime();
+					if(Directory.Exists(appDataReplayDirPath))
+					{
+						CopyFolder(appDataReplayDirPath, appDataReplayDirPath + time);
+						Directory.Delete(appDataReplayDirPath, true);
 						Log.Info("Created backups of replays in appdata");
-                    }
+					}
 
 
-                    CopyFolder(dataReplayDirPath, appDataReplayDirPath);
-                    Directory.Delete(dataReplayDirPath, true);
+					CopyFolder(dataReplayDirPath, appDataReplayDirPath);
+					Directory.Delete(dataReplayDirPath, true);
 
 					Log.Info("Moved replays to appdata");
-                }
-            }
-            else if(Directory.Exists(appDataReplayDirPath)) //Save in DataDir and AppData Replay dir still exists
-            {
-                //backup in case the file already exists
-                var time = DateTime.Now.ToFileTime();
-                if(Directory.Exists(dataReplayDirPath))
-                {
-                    CopyFolder(dataReplayDirPath, dataReplayDirPath + time);
-                    Directory.Delete(dataReplayDirPath, true);
-                }
+				}
+			}
+			else if(Directory.Exists(appDataReplayDirPath)) //Save in DataDir and AppData Replay dir still exists
+			{
+				//backup in case the file already exists
+				var time = DateTime.Now.ToFileTime();
+				if(Directory.Exists(dataReplayDirPath))
+				{
+					CopyFolder(dataReplayDirPath, dataReplayDirPath + time);
+					Directory.Delete(dataReplayDirPath, true);
+				}
 				Log.Info("Created backups of replays locally");
 
 
-                CopyFolder(appDataReplayDirPath, dataReplayDirPath);
-                Directory.Delete(appDataReplayDirPath, true);
+				CopyFolder(appDataReplayDirPath, dataReplayDirPath);
+				Directory.Delete(appDataReplayDirPath, true);
 				Log.Info("Moved replays to appdata");
-            }
-        }
-
-	    public static void UpdateAppTheme()
-	    {
-            var theme = string.IsNullOrEmpty(Config.Instance.ThemeName)
-                            ? ThemeManager.DetectAppStyle().Item1 : ThemeManager.AppThemes.First(t => t.Name == Config.Instance.ThemeName);
-            var accent = string.IsNullOrEmpty(Config.Instance.AccentName)
-                             ? ThemeManager.DetectAppStyle().Item2 : ThemeManager.Accents.First(a => a.Name == Config.Instance.AccentName);
-            ThemeManager.ChangeAppStyle(Application.Current, accent, theme);
-            Application.Current.Resources["GrayTextColorBrush"] = theme.Name == "BaseLight"
-                                                                           ? new SolidColorBrush((MediaColor)Application.Current.Resources["GrayTextColor1"])
-                                                                           : new SolidColorBrush((MediaColor)Application.Current.Resources["GrayTextColor2"]);
+			}
 		}
+
+		public static void UpdateAppTheme()
+		{
+			var theme = GetAppTheme();
+			ThemeManager.ChangeAppStyle(Application.Current, GetAppAccent(), theme);
+			Application.Current.Resources["GrayTextColorBrush"] = theme.Name == MetroTheme.BaseLight.ToString()
+																	  ? new SolidColorBrush((MediaColor)Application.Current.Resources["GrayTextColor1"])
+																	  : new SolidColorBrush((MediaColor)Application.Current.Resources["GrayTextColor2"]);
+		}
+
+		public static Accent GetAppAccent() => string.IsNullOrEmpty(Config.Instance.AccentName)
+												  ? ThemeManager.DetectAppStyle().Item2 : ThemeManager.Accents.First(a => a.Name == Config.Instance.AccentName);
+
+		public static AppTheme GetAppTheme() => ThemeManager.AppThemes.First(t => t.Name == Config.Instance.AppTheme.ToString());
 
 		public static double GetScaledXPos(double left, int width, double ratio) => (width * ratio * left) + (width * (1 - ratio) / 2);
 
@@ -665,28 +635,30 @@ namespace Hearthstone_Deck_Tracker
 		{
 			if(string.IsNullOrEmpty(className))
 				return Colors.DimGray;
-            MediaColor color;
+			MediaColor color;
 			if(Config.Instance.ClassColorScheme == ClassColorScheme.HearthStats)
-		    {
+			{
 				if(!HearthStatsClassColors.TryGetValue(className, out color))
-		            color = Colors.DimGray;
-		    }
-		    else
-		    {
+					color = Colors.DimGray;
+			}
+			else
+			{
 				if(className == "Priest" && priestAsGray)
-		            color = MediaColor.FromArgb(0xFF, 0xD2, 0xD2, 0xD2); //#D2D2D2
+					color = MediaColor.FromArgb(0xFF, 0xD2, 0xD2, 0xD2); //#D2D2D2
 				else if(!ClassicClassColors.TryGetValue(className, out color))
-		            color = MediaColor.FromArgb(0xFF, 0x80, 0x80, 0x80); //#808080
-		    }
-		    return color;
+					color = MediaColor.FromArgb(0xFF, 0x80, 0x80, 0x80); //#808080
+			}
+			return color;
 		}
 
-		public static MetroWindow GetParentWindow(DependencyObject current)
+		public static MetroWindow GetParentWindow(DependencyObject current) => GetVisualParent<MetroWindow>(current);
+
+		public static T GetVisualParent<T>(DependencyObject current)
 		{
 			var parent = VisualTreeHelper.GetParent(current);
-			while(parent != null && !(parent is MetroWindow))
+			while(parent != null && !(parent is T))
 				parent = VisualTreeHelper.GetParent(parent);
-			return (MetroWindow)parent;
+			return (T)(object)parent;
 		}
 
 		public static bool IsWindows10()
@@ -753,6 +725,51 @@ namespace Hearthstone_Deck_Tracker
 				foreach(var childOfChild in FindLogicalChildren<T>(childDepObj))
 					yield return childOfChild;
 			}
+		}
+
+		public static async Task WaitForFileAccess(string path, int delay)
+		{
+			while(true)
+			{
+				try
+				{
+					using(var stream = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+					{
+						if(stream.Name != null)
+							break;
+					}
+				}
+				catch
+				{
+					await Task.Delay(delay);
+				}
+			}
+		}
+
+		public static Region GetRegionByServerIp(string ip)
+		{
+			if(string.IsNullOrEmpty(ip))
+				return Region.UNKNOWN;
+			if(ip.StartsWith("12.130"))
+				return Region.US;
+			if(ip.StartsWith("80.239"))
+				return Region.EU;
+			if(ip.StartsWith("117.52"))
+				return Region.ASIA;
+			if(ip.StartsWith("114.113"))
+				return Region.CHINA;
+			Log.Warn("Unknown IP: " + ip);
+			return Region.UNKNOWN;
+		}
+
+		public static SolidColorBrush BrushFromHex(string hex)
+		{
+			if(hex.StartsWith("#"))
+				hex = hex.Remove(0, 1);
+			if(string.IsNullOrEmpty(hex) || hex.Length != 6 || !Helper.IsHex(hex))
+				return null;
+			var color = ColorTranslator.FromHtml("#" + hex);
+			return new SolidColorBrush(MediaColor.FromRgb(color.R, color.G, color.B));
 		}
 	}
 }

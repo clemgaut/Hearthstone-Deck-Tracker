@@ -189,25 +189,9 @@ namespace Hearthstone_Deck_Tracker.Windows
 			{
 				Log.Error(ex);
 			}*/
-        }
-
-        private void MenuItemReplaySelectGame_OnClick(object sender, RoutedEventArgs e)
-		{
-			if(Config.Instance.StatsInWindow)
-			{
-				Core.Windows.StatsWindow.WindowState = WindowState.Normal;
-				Core.Windows.StatsWindow.Show();
-				Core.Windows.StatsWindow.Activate();
-				Core.Windows.StatsWindow.StatsControl.TabControlCurrentOverall.SelectedIndex = 1;
-				Core.Windows.StatsWindow.StatsControl.TabControlOverall.SelectedIndex = 1;
-			}
-			else
-			{
-				FlyoutDeckStats.IsOpen = true;
-				DeckStatsFlyout.TabControlCurrentOverall.SelectedIndex = 1;
-				DeckStatsFlyout.TabControlOverall.SelectedIndex = 1;
-			}
 		}
+
+		private void MenuItemReplaySelectGame_OnClick(object sender, RoutedEventArgs e) => ShowStats(false, true);
 
 		private void MenuItemSaveVersionCurrent_OnClick(object sender, RoutedEventArgs e) => SaveDeckWithOverwriteCheck(_newDeck.Version);
 
@@ -411,20 +395,20 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 		private void BtnStartHearthstone_Click(object sender, RoutedEventArgs e) => Helper.StartHearthstoneAsync().Forget();
 
-		private void ButtonCloseStatsFlyout_OnClick(object sender, RoutedEventArgs e) => FlyoutNewStats.IsOpen = false;
+		private void ButtonCloseStatsFlyout_OnClick(object sender, RoutedEventArgs e) => FlyoutStats.IsOpen = false;
 
 		private async void ButtonSwitchStatsToNewWindow_OnClick(object sender, RoutedEventArgs e)
 		{
 			Config.Instance.StatsInWindow = true;
 			Config.Save();
 			StatsFlyoutContentControl.Content = null;
-			Core.Windows.NewStatsWindow.ContentControl.Content = Core.StatsOverview;
-			Core.Windows.NewStatsWindow.WindowState = WindowState.Normal;
-			Core.Windows.NewStatsWindow.Show();
+			Core.Windows.StatsWindow.ContentControl.Content = Core.StatsOverview;
+			Core.Windows.StatsWindow.WindowState = WindowState.Normal;
+			Core.Windows.StatsWindow.Show();
 			Core.StatsOverview.UpdateStats();
-			FlyoutNewStats.IsOpen = false;
+			FlyoutStats.IsOpen = false;
 			await Task.Delay(100);
-			Core.Windows.NewStatsWindow.Activate();
+			Core.Windows.StatsWindow.Activate();
 		}
 
 		#region Properties
@@ -435,10 +419,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 		private bool _initialized => Core.Initialized;
 
 		public bool EditingDeck;
-
-
-		public bool IsShowingIncorrectDeckMessage;
-		public bool NeedToIncorrectDeckMessage;
 		private Deck _newDeck;
 		private bool _newDeckUnsavedChanges;
 		private Deck _originalDeck;
@@ -450,6 +430,13 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 		public bool ShowToolTip => Config.Instance.TrackerCardToolTips;
 		
+		public string IntroductionLabelText
+			=> Config.Instance.ConstructedAutoImportNew ? "ENTER THE 'PLAY' MENU TO AUTOMATICALLY IMPORT YOUR DECKS" : "ADD NEW DECKS BY CLICKING 'NEW' OR 'IMPORT'";
+
+		public Visibility IntroductionLabelVisibility => DeckList.Instance.Decks.Any() ? Collapsed : Visible;
+
+		public void UpdateIntroLabelVisibility() => OnPropertyChanged(nameof(IntroductionLabelVisibility));
+
 		public string LastSync
 		{
 			get
@@ -484,7 +471,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 			InitializeComponent();
 			Trace.Listeners.Add(new TextBoxTraceListener(Options.OptionsTrackerLogging.TextBoxLog));
 			EnableMenuItems(false);
-			TagControlEdit.OperationSwitch.Visibility = Collapsed;
+			TagControlEdit.StackPanelFilterOptions.Visibility = Collapsed;
 			TagControlEdit.GroupBoxSortingAllConstructed.Visibility = Collapsed;
 			TagControlEdit.GroupBoxSortingArena.Visibility = Collapsed;
 			SortFilterDecksFlyout.HideStuffToCreateNewTag();
@@ -617,7 +604,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 				Core.Windows.TimerWindow.Shutdown();
 				Core.Windows.PlayerWindow.Shutdown();
 				Core.Windows.OpponentWindow.Shutdown();
-				Core.Windows.StatsWindow.Shutdown();
 				Config.Save();
 				DeckList.Save();
 				DeckStatsList.Save();
@@ -650,108 +636,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 		#endregion
 
 		#region GENERAL METHODS
-
-		public async void ShowIncorrectDeckMessage()
-		{
-			if(Core.Game.Player.DrawnCards.Count == 0)
-			{
-				IsShowingIncorrectDeckMessage = false;
-				return;
-			}
-
-			//wait for player hero to be detected and at least 3 cards to be drawn
-			for(var i = 0; i < 50; i++)
-			{
-				if(Core.Game.Player.Class != null && Core.Game.Player.DrawnCards.Count >= 3)
-					break;
-				await Task.Delay(100);
-			}
-			if(string.IsNullOrEmpty(Core.Game.Player.Class) || Core.Game.Player.DrawnCards.Count < 3)
-			{
-				IsShowingIncorrectDeckMessage = false;
-				Log.Info("No player hero detected or less then 3 cards drawn. Not showing dialog.");
-				return;
-			}
-			await Task.Delay(1000);
-
-			if(!NeedToIncorrectDeckMessage)
-			{
-				IsShowingIncorrectDeckMessage = false;
-				return;
-			}
-
-			var decks =
-				DeckList.Instance.Decks.Where(
-				                              d =>
-				                              d.Class == Core.Game.Player.Class && !d.Archived && d.IsArenaRunCompleted != true
-				                              && Core.Game.Player.DrawnCardIdsTotal.Distinct()
-				                                     .All(id => d.GetSelectedDeckVersion().Cards.Any(c => id == c.Id))
-				                              && Core.Game.Player.DrawnCards.All(
-				                                                                 c =>
-				                                                                 d.GetSelectedDeckVersion()
-				                                                                  .Cards.Any(c2 => c2.Id == c.Id && c2.Count >= c.Count))).ToList();
-
-			Log.Info(decks.Count + " possible decks found.");
-			Core.Game.NoMatchingDeck = decks.Count == 0;
-
-			if(decks.Any(x => x == DeckList.Instance.ActiveDeck))
-			{
-				Log.Info("Correct deck already selected.");
-				IsShowingIncorrectDeckMessage = false;
-				NeedToIncorrectDeckMessage = false;
-				return;
-			}
-
-			if(decks.Count == 1 && Config.Instance.AutoSelectDetectedDeck)
-			{
-				var deck = decks.First();
-				Log.Info("Automatically selected deck: " + deck.Name);
-				DeckPickerList.SelectDeck(deck);
-				UpdateDeckList(deck);
-				UseDeck(deck);
-			}
-			else
-			{
-				decks.Add(new Deck("Use no deck", "", new List<Card>(), new List<string>(), "", "", DateTime.Now, false, new List<Card>(),
-				                   SerializableVersion.Default, new List<Deck>(), false, "", Guid.Empty, ""));
-				if(decks.Count == 1 && DeckList.Instance.ActiveDeckVersion != null)
-				{
-					decks.Add(new Deck("No match - Keep using active deck", "", new List<Card>(), new List<string>(), "", "", DateTime.Now, false,
-					                   new List<Card>(), SerializableVersion.Default, new List<Deck>(), false, "", Guid.Empty, ""));
-				}
-				var dsDialog = new DeckSelectionDialog(decks);
-				dsDialog.ShowDialog();
-
-				var selectedDeck = dsDialog.SelectedDeck;
-
-				if(selectedDeck != null)
-				{
-					if(selectedDeck.Name == "Use no deck")
-						SelectDeck(null, true);
-					else if(selectedDeck.Name == "No match - Keep using active deck")
-					{
-						Core.Game.IgnoreIncorrectDeck = DeckList.Instance.ActiveDeck;
-						Log.Info($"Now ignoring {DeckList.Instance.ActiveDeck.Name} as an incorrect deck");
-					}
-					else
-					{
-						Log.Info("Selected deck: " + selectedDeck.Name);
-						DeckPickerList.SelectDeck(selectedDeck);
-						UpdateDeckList(selectedDeck);
-						UseDeck(selectedDeck);
-					}
-				}
-				else
-				{
-					this.ShowMessage("Auto deck selection disabled.", "This can be re-enabled by selecting \"AUTO\" in the bottom right of the deck picker.").Forget();
-					DeckPickerList.UpdateAutoSelectToggleButton();
-					Config.Save();
-				}
-			}
-
-			IsShowingIncorrectDeckMessage = false;
-			NeedToIncorrectDeckMessage = false;
-		}
 
 		private void MinimizeToTray()
 		{
@@ -789,44 +673,44 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 		#region MY DECKS - GUI
 
-		private void BtnDeckStats_Click(object sender, RoutedEventArgs e) => ShowStats();
+		private void BtnArenaStats_Click(object sender, RoutedEventArgs e) => ShowStats(true, false);
 
-		public void ShowStats()
+		private void BtnConstructedStats_Click(object sender, RoutedEventArgs e) => ShowStats(false, false);
+
+		internal void ShowStats(bool arena, bool matches)
 		{
-			var deck = DeckPickerList.SelectedDecks.FirstOrDefault() ?? DeckList.Instance.ActiveDeck;
 			if(Config.Instance.StatsInWindow)
 			{
-				Core.Windows.StatsWindow.StatsControl.SetDeck(deck);
+				StatsFlyoutContentControl.Content = null;
+				Core.Windows.StatsWindow.ContentControl.Content = Core.StatsOverview;
 				Core.Windows.StatsWindow.WindowState = WindowState.Normal;
 				Core.Windows.StatsWindow.Show();
 				Core.Windows.StatsWindow.Activate();
 			}
 			else
 			{
-				DeckStatsFlyout.SetDeck(deck);
-				FlyoutDeckStats.IsOpen = true;
-			}
+				Core.Windows.StatsWindow.ContentControl.Content = null;
+				StatsFlyoutContentControl.Content = Core.StatsOverview;
+				FlyoutStats.IsOpen = true;
 		}
-
-		private void BtnDeckNewStats_Click(object sender, RoutedEventArgs e)
-		{
-			if(Config.Instance.StatsInWindow)
+			if(arena)
 			{
-				StatsFlyoutContentControl.Content = null;
-				Core.Windows.NewStatsWindow.ContentControl.Content = Core.StatsOverview;
-				Core.Windows.NewStatsWindow.WindowState = WindowState.Normal;
-				Core.Windows.NewStatsWindow.Show();
-				Core.Windows.NewStatsWindow.Activate();
-				Core.StatsOverview.UpdateStats();
+				if(matches)
+					Core.StatsOverview.TreeViewItemArenaRunsOverview.IsSelected = true;
+				else
+					Core.StatsOverview.TreeViewItemArenaRunsSummary.IsSelected = true;
+				Core.StatsOverview.ContentControlFilter.Content = Core.StatsOverview.ArenaFilters;
 			}
 			else
 			{
-				Core.Windows.NewStatsWindow.ContentControl.Content = null;
-				StatsFlyoutContentControl.Content = Core.StatsOverview;
-				FlyoutNewStats.IsOpen = true;
+				if(matches)
+					Core.StatsOverview.TreeViewItemConstructedGames.IsSelected = true;
+				else
+					Core.StatsOverview.TreeViewItemConstructedSummary.IsSelected = true;
+				Core.StatsOverview.ContentControlFilter.Content = Core.StatsOverview.ConstructedFilters;
+			}
 				Core.StatsOverview.UpdateStats();
 			}
-		}
 
 		private void DeckPickerList_OnSelectedDeckChanged(DeckPicker sender, Deck deck)
 		{
@@ -864,10 +748,13 @@ namespace Hearthstone_Deck_Tracker.Windows
 						else
 							break;
 					}
-					DeckList.Instance.LastDeckClass.Add(new DeckInfo {Class = deck.Class, Name = deck.Name, Id = deck.DeckId});
+					if(Core.Initialized)
+					{
+						DeckList.Instance.LastDeckClass.Add(new DeckInfo { Class = deck.Class, Name = deck.Name, Id = deck.DeckId });
 					DeckList.Save();
+					}
 
-					Log.Info("Switched to deck: " + deck.Name);
+					Log.Info($"Switched to deck: {deck.Name} ({deck.SelectedVersion.ShortVersionString})");
 
 					int useNoDeckMenuItem = Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems.IndexOfKey(TrayIcon.UseNoDeckMenuItemName);
 					Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Checked = false;
@@ -888,15 +775,9 @@ namespace Hearthstone_Deck_Tracker.Windows
 				Core.TrayIcon.NotifyIcon.ContextMenu.MenuItems[useNoDeckMenuItem].Checked = true;
 			}
 
-			//set up stats
-			var statsTitle = $"Stats{(deck == null ? "" : ": " + deck.Name)}";
-			Core.Windows.StatsWindow.Title = statsTitle;
-			FlyoutDeckStats.Header = statsTitle;
-			Core.Windows.StatsWindow.StatsControl.SetDeck(deck);
-			DeckStatsFlyout.SetDeck(deck);
-
 			if(setActive)
 				UseDeck(deck);
+			DeckPickerList.SelectDeck(deck);
 			UpdateDeckList(deck);
 			EnableMenuItems(deck != null);
 			ManaCurveMyDecks.SetDeck(deck);

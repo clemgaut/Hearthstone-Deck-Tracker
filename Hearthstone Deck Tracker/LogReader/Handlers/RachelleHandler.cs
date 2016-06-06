@@ -17,15 +17,7 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 	{
 		public void Handle(string logLine, IHsGameState gameState, IGame game)
 		{
-			if(CardAlreadyInCacheRegex.IsMatch(logLine))
-			{
-				var id = CardAlreadyInCacheRegex.Match(logLine).Groups["id"].Value;
-				if(game.CurrentGameMode == GameMode.Arena)
-					gameState.GameHandler.HandlePossibleArenaCard(id);
-				else
-					gameState.GameHandler.HandlePossibleConstructedCard(id, false);
-			}
-			else if(GoldProgressRegex.IsMatch(logLine) && (DateTime.Now - gameState.LastGameStart) > TimeSpan.FromSeconds(10)
+			if(GoldProgressRegex.IsMatch(logLine) && (DateTime.Now - gameState.LastGameStart) > TimeSpan.FromSeconds(10)
 			        && game.CurrentGameMode != GameMode.Spectator)
 			{
 				int wins;
@@ -36,18 +28,6 @@ namespace Hearthstone_Deck_Tracker.LogReader.Handlers
 					if(timeZone != null)
 						UpdateGoldProgress(wins, game, timeZone);
 				}
-			}
-			else if(DustRewardRegex.IsMatch(logLine))
-			{
-				int amount;
-				if(int.TryParse(DustRewardRegex.Match(logLine).Groups["amount"].Value, out amount))
-					gameState.GameHandler.HandleDustReward(amount);
-			}
-			else if(GoldRewardRegex.IsMatch(logLine))
-			{
-				int amount;
-				if(int.TryParse(GoldRewardRegex.Match(logLine).Groups["amount"].Value, out amount))
-					gameState.GameHandler.HandleGoldReward(amount);
 			}
 		}
 

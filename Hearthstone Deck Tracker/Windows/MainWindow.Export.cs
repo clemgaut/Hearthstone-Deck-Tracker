@@ -7,7 +7,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Hearthstone_Deck_Tracker.Controls;
 using Hearthstone_Deck_Tracker.Exporting;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Utility.Extensions;
@@ -26,7 +28,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 			var deck = DeckPickerList.SelectedDecks.FirstOrDefault() ?? DeckList.Instance.ActiveDeck;
 			if(deck == null)
 				return;
-			ExportDeck(deck.GetSelectedDeckVersion());
+			ExportDeck(deck);
 		}
 
 		private async void ExportDeck(Deck deck)
@@ -34,19 +36,9 @@ namespace Hearthstone_Deck_Tracker.Windows
 			var export = true;
 			if(Config.Instance.ShowExportingDialog)
 			{
-				var message =
-					$"1) create a new {deck.Class} deck{(Config.Instance.AutoClearDeck ? " (or open an existing one to be cleared automatically)" : "")}.\n\n2) leave the deck creation screen open.\n\n3) do not move your mouse or type after clicking \"export\".";
-
-				if(deck.GetSelectedDeckVersion().Cards.Any(c => c.Name == "Stalagg" || c.Name == "Feugen"))
-				{
-					message +=
-						"\n\nIMPORTANT: If you own golden versions of Feugen or Stalagg please make sure to configure\nOptions > Other > Exporting";
-				}
-
+				var message = $"1) Create a new (or open an existing) {deck.Class} deck.\n\n2) Leave the deck creation screen open.\n\n3) Click 'Export' and do not move your mouse or type until done.";
 				var settings = new MessageDialogs.Settings {AffirmativeButtonText = "Export"};
-				var result =
-					await
-					this.ShowMessageAsync("Export " + deck.Name + " to Hearthstone", message, MessageDialogStyle.AffirmativeAndNegative, settings);
+				var result = await this.ShowMessageAsync("Export " + deck.Name + " to Hearthstone", message, MessageDialogStyle.AffirmativeAndNegative, settings);
 				export = result == MessageDialogResult.Affirmative;
 			}
 			if(export)
@@ -54,33 +46,55 @@ namespace Hearthstone_Deck_Tracker.Windows
 				var controller = await this.ShowProgressAsync("Creating Deck", "Please do not move your mouse or type.");
 				Topmost = false;
 				await Task.Delay(500);
-				await DeckExporter.Export(deck);
+				var success = await DeckExporter.Export(deck);
 				await controller.CloseAsync();
+
+				if(success)
+				{
+					var hsDeck = HearthMirror.Reflection.GetEditedDeck();
+					if(hsDeck != null)
+					{
+						var existingHsId = DeckList.Instance.Decks.Where(x => x.DeckId != deck.DeckId).FirstOrDefault(x => x.HsId == hsDeck.Id);
+						if(existingHsId != null)
+							existingHsId.HsId = 0;
+						deck.HsId = hsDeck.Id;
+						DeckList.Save();
+					}
+				}
 
 				if(deck.MissingCards.Any())
 					this.ShowMissingCardsMessage(deck);
 			}
 		}
 
-		private async void BtnScreenhot_Click(object sender, RoutedEventArgs e)
+		private void BtnScreenhot_Click(object sender, RoutedEventArgs e) => CaptureScreenshot(true);
+
+		private void BtnScreenhotWithInfo_Click(object sender, RoutedEventArgs e) => CaptureScreenshot(false);
+
+		private async void CaptureScreenshot(bool deckOnly)
 		{
 			var selectedDeck = DeckPickerList.SelectedDecks.FirstOrDefault();
 			if(selectedDeck == null)
 				return;
 			Log.Info("Creating screenshot of " + selectedDeck.GetSelectedDeckVersion().GetDeckInfo());
-			var screenShotWindow = new PlayerWindow(Core.Game, selectedDeck.GetSelectedDeckVersion().Cards.ToSortedCardList());
-			screenShotWindow.Show();
-			screenShotWindow.Top = 0;
-			screenShotWindow.Left = 0;
-			await Task.Delay(100);
-			var source = PresentationSource.FromVisual(screenShotWindow);
-			if(source == null)
-				return;
 
 			var deck = selectedDeck.GetSelectedDeckVersion();
-			var pngEncoder = Helper.ScreenshotDeck(screenShotWindow.ListViewPlayer, 96, 96, deck.Name);
-			screenShotWindow.Shutdown();
-			await SaveOrUploadScreenshot(pngEncoder, deck.Name);
+			var cards = 35 * deck.Cards.Count;
+			var height = (deckOnly ? 0 : 124) + cards;
+			var width = 219;
+
+			DeckView control = new DeckView(deck, deckOnly);
+			control.Measure(new Size(width, height));
+			control.Arrange(new Rect(new Size(width, height)));
+			control.UpdateLayout();
+			Log.Debug($"Screenshot: {control.ActualWidth} x {control.ActualHeight}");
+
+			RenderTargetBitmap bmp = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+			bmp.Render(control);
+			var encoder = new PngBitmapEncoder();
+			encoder.Frames.Add(BitmapFrame.Create(bmp));
+
+			await SaveOrUploadScreenshot(encoder, deck.Name);
 		}
 
 		public async Task SaveOrUploadScreenshot(PngBitmapEncoder pngEncoder, string proposedFileName)
@@ -88,6 +102,8 @@ namespace Hearthstone_Deck_Tracker.Windows
 			if(pngEncoder != null)
 			{
 				var saveOperation = await this.ShowScreenshotUploadSelectionDialog();
+				if(saveOperation.Cancelled)
+					return;
 				var tmpFile = new FileInfo(Path.Combine(Config.Instance.DataDir, $"tmp{DateTime.Now.ToFileTime()}.png"));
 				var fileName = saveOperation.SaveLocal
 					               ? Helper.ShowSaveFileDialog(Helper.RemoveInvalidFileNameChars(proposedFileName), "png") : tmpFile.FullName;

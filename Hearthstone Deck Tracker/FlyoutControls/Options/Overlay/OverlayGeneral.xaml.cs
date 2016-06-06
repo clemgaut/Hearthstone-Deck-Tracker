@@ -43,11 +43,10 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Overlay
 			CheckboxAutoGrayoutSecrets.IsChecked = Config.Instance.AutoGrayoutSecrets;
 			CheckboxKeepDecksVisible.IsChecked = Config.Instance.KeepDecksVisible;
 			CheckboxAlwaysShowGoldProgress.IsChecked = Config.Instance.AlwaysShowGoldProgress;
-			CheckboxHidePlayerAttackIcon.IsChecked = Config.Instance.HidePlayerAttackIcon;
-			CheckboxHideOpponentAttackIcon.IsChecked = Config.Instance.HideOpponentAttackIcon;
 			CheckBoxBatteryStatus.IsChecked = Config.Instance.ShowBatteryLife;
 			CheckBoxBatteryStatusText.IsChecked = Config.Instance.ShowBatteryLifePercent;
 			CheckBoxFlavorText.IsChecked = Config.Instance.ShowFlavorText;
+			CheckBoxOverlayUseAnimations.IsChecked = Config.Instance.OverlayCardAnimations;
 			_initialized = true;
 		}
 
@@ -375,38 +374,6 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Overlay
 			SaveConfig(true);
 		}
 
-		private void CheckboxHidePlayerAttackIcon_Checked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.HidePlayerAttackIcon = true;
-			SaveConfig(true);
-		}
-
-		private void CheckboxHidePlayerAttackIcon_Unchecked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.HidePlayerAttackIcon = false;
-			SaveConfig(true);
-		}
-
-		private void CheckboxHideOpponentAttackIcon_Checked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.HideOpponentAttackIcon = true;
-			SaveConfig(true);
-		}
-
-		private void CheckboxHideOpponentAttackIcon_Unchecked(object sender, RoutedEventArgs e)
-		{
-			if(!_initialized)
-				return;
-			Config.Instance.HideOpponentAttackIcon = false;
-			SaveConfig(true);
-		}
-
 		private void CheckBoxBatteryStatus_Checked(object sender, RoutedEventArgs e)
 		{
 			if (!_initialized)
@@ -458,6 +425,22 @@ namespace Hearthstone_Deck_Tracker.FlyoutControls.Options.Overlay
 			Config.Instance.ShowFlavorText = false;
 			Config.Save();
 			Core.Overlay.FlavorTextVisibility = Visibility.Collapsed;
+		}
+
+		private void CheckboxOverlayUseAnimations_Checked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.OverlayCardAnimations = true;
+			Config.Save();
+		}
+
+		private void CheckboxOverlayUseAnimations_Unchecked(object sender, RoutedEventArgs e)
+		{
+			if(!_initialized)
+				return;
+			Config.Instance.OverlayCardAnimations = false;
+			Config.Save();
 		}
 	}
 }

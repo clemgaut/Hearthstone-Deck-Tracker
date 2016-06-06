@@ -13,36 +13,24 @@ namespace Hearthstone_Deck_Tracker.Stats
 {
 	public class DeckStatsList
 	{
-		private static DeckStatsList _instance;
+		private static Lazy<DeckStatsList> _instance = new Lazy<DeckStatsList>(Load);
 
 		[XmlArray(ElementName = "DeckStats")]
 		[XmlArrayItem(ElementName = "Deck")]
-		public List<DeckStats> DeckStats;
+		public List<DeckStats> DeckStats = new List<DeckStats>();
 
-		public DeckStatsList()
-		{
-			DeckStats = new List<DeckStats>();
-		}
+		public static DeckStatsList Instance => _instance.Value;
 
-		public static DeckStatsList Instance
-		{
-			get
-			{
-				if(_instance == null)
-					Load();
-				return _instance ?? (_instance = new DeckStatsList());
-			}
-		}
-
-		public static void Load()
+		private static DeckStatsList Load()
 		{
 			SetupDeckStatsFile();
 			var file = Config.Instance.DataDir + "DeckStats.xml";
 			if(!File.Exists(file))
-				return;
+				return new DeckStatsList();
+			DeckStatsList instance = null;
 			try
 			{
-				_instance = XmlManager<DeckStatsList>.Load(file);
+				instance = XmlManager<DeckStatsList>.Load(file);
 			}
 			catch(Exception)
 			{
@@ -66,7 +54,7 @@ namespace Hearthstone_Deck_Tracker.Stats
 					try
 					{
 						File.Copy(backup.FullName, file);
-						_instance = XmlManager<DeckStatsList>.Load(file);
+						instance = XmlManager<DeckStatsList>.Load(file);
 					}
 					catch(Exception ex)
 					{
@@ -75,9 +63,11 @@ namespace Hearthstone_Deck_Tracker.Stats
 							ex);
 					}
 				}
-				else
+				if(instance == null)
 					throw new Exception("DeckStats.xml is corrupted.");
 			}
+			instance.DeckStats = instance.DeckStats.Where(x => x?.Games.Any() ?? false).ToList();
+			return instance;
 		}
 
 		internal static void SetupDeckStatsFile()
@@ -149,5 +139,7 @@ namespace Hearthstone_Deck_Tracker.Stats
 
 
 		public static void Save() => XmlManager<DeckStatsList>.Save(Config.Instance.DataDir + "DeckStats.xml", Instance);
+
+		internal static void Reload() => _instance = new Lazy<DeckStatsList>(Load);
 	}
 }

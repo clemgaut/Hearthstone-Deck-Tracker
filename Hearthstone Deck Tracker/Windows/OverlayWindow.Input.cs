@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using Hearthstone_Deck_Tracker.Controls.Overlay;
 using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.Utility.Logging;
@@ -36,52 +38,96 @@ namespace Hearthstone_Deck_Tracker.Windows
 			var delta = new Point((newPos.X - _mousePos.X) * 100, (newPos.Y - _mousePos.Y) * 100);
 			_mousePos = newPos;
 
-			var panel = _selectedUiElement as StackPanel;
-			if (panel != null)
+
+			var border = _selectedUiElement as Border;
+			if(border != null)
 			{
-				if (panel.Equals(StackPanelPlayer))
+				if(border.Equals(BorderStackPanelPlayer))
 				{
-					if (_resizeElement)
+					if(_resizeElement)
 					{
 						Config.Instance.PlayerDeckHeight += delta.Y / Height;
-						_movableElements[panel].Height = Height * Config.Instance.PlayerDeckHeight / 100;
+						_movableElements[border].Height = Height * Config.Instance.PlayerDeckHeight / 100;
+						OnPropertyChanged(nameof(OpponentListHeight));
 					}
 					else
 					{
 						Config.Instance.PlayerDeckTop += delta.Y / Height;
 						Config.Instance.PlayerDeckLeft += delta.X / Width;
-						Canvas.SetTop(_movableElements[panel], Height * Config.Instance.PlayerDeckTop / 100);
-						Canvas.SetLeft(_movableElements[panel],
-									   Width * Config.Instance.PlayerDeckLeft / 100
-									   - StackPanelPlayer.ActualWidth * Config.Instance.OverlayPlayerScaling / 100);
+						Canvas.SetTop(_movableElements[border], Height * Config.Instance.PlayerDeckTop / 100);
+						Canvas.SetLeft(_movableElements[border], Width * Config.Instance.PlayerDeckLeft / 100 
+										- StackPanelPlayer.ActualWidth * Config.Instance.OverlayPlayerScaling / 100);
 					}
 					return;
 				}
-				if (panel.Equals(StackPanelOpponent))
+				if(border.Equals(BorderStackPanelOpponent))
 				{
-					if (_resizeElement)
+					if(_resizeElement)
 					{
 						Config.Instance.OpponentDeckHeight += delta.Y / Height;
-						_movableElements[panel].Height = Height * Config.Instance.OpponentDeckHeight / 100;
+						_movableElements[border].Height = Height * Config.Instance.OpponentDeckHeight / 100;
+						OnPropertyChanged(nameof(OpponentListHeight));
 					}
 					else
 					{
 						Config.Instance.OpponentDeckTop += delta.Y / Height;
 						Config.Instance.OpponentDeckLeft += delta.X / Width;
-						Canvas.SetTop(_movableElements[panel], Height * Config.Instance.OpponentDeckTop / 100);
-						Canvas.SetLeft(_movableElements[panel], Width * Config.Instance.OpponentDeckLeft / 100);
+						Canvas.SetTop(_movableElements[border], Height * Config.Instance.OpponentDeckTop / 100);
+						Canvas.SetLeft(_movableElements[border], Width * Config.Instance.OpponentDeckLeft / 100);
 					}
 					return;
 				}
-				if (panel.Equals(StackPanelSecrets))
+			}
+
+			var panel = _selectedUiElement as Panel;
+			if(panel != null)
+			{
+				if(panel.Equals(StackPanelSecrets))
 				{
-					if (!_resizeElement)
+					if(!_resizeElement)
 					{
-						Config.Instance.SecretsTop += delta.Y / Height;
-						Config.Instance.SecretsLeft += delta.X / Width;
+						Config.Instance.SecretsTop += delta.Y / Height * Config.Instance.SecretsPanelScaling;
+						Config.Instance.SecretsLeft += delta.X / Width * Config.Instance.SecretsPanelScaling;
 						Canvas.SetTop(_movableElements[panel], Height * Config.Instance.SecretsTop / 100);
 						Canvas.SetLeft(_movableElements[panel], Width * Config.Instance.SecretsLeft / 100);
 					}
+				}
+
+				if(panel.Equals(IconBoardAttackPlayer))
+				{
+					Config.Instance.AttackIconPlayerVerticalPosition += delta.Y / Height;
+					Config.Instance.AttackIconPlayerHorizontalPosition += delta.X / (Width * ScreenRatio);
+					Canvas.SetTop(_movableElements[panel], Height * Config.Instance.AttackIconPlayerVerticalPosition / 100);
+					Canvas.SetLeft(_movableElements[panel], Helper.GetScaledXPos(Config.Instance.AttackIconPlayerHorizontalPosition / 100, (int)Width, ScreenRatio));
+					return;
+				}
+				if(panel.Equals(IconBoardAttackOpponent))
+				{
+					Config.Instance.AttackIconOpponentVerticalPosition += delta.Y / Height;
+					Config.Instance.AttackIconOpponentHorizontalPosition += delta.X / (Width * ScreenRatio);
+					Canvas.SetTop(_movableElements[panel], Height * Config.Instance.AttackIconOpponentVerticalPosition / 100);
+					Canvas.SetLeft(_movableElements[panel], Helper.GetScaledXPos(Config.Instance.AttackIconOpponentHorizontalPosition / 100, (int)Width, ScreenRatio));
+				}
+			}
+
+			var wotogIcons = _selectedUiElement as WotogCounter;
+			if(wotogIcons != null)
+			{
+				if(wotogIcons.Equals(WotogIconsPlayer))
+				{
+					Config.Instance.WotogIconsPlayerVertical += delta.Y / Height;
+					Config.Instance.WotogIconsPlayerHorizontal += delta.X / (Width * ScreenRatio);
+					Canvas.SetTop(_movableElements[wotogIcons], Height * Config.Instance.WotogIconsPlayerVertical / 100);
+					Canvas.SetLeft(_movableElements[wotogIcons], Helper.GetScaledXPos(Config.Instance.WotogIconsPlayerHorizontal / 100, (int)Width, ScreenRatio));
+					return;
+				}
+				if(wotogIcons.Equals(WotogIconsOpponent))
+				{
+					Config.Instance.WotogIconsOpponentVertical += delta.Y / Height;
+					Config.Instance.WotogIconsOpponentHorizontal += delta.X / (Width * ScreenRatio);
+					Canvas.SetTop(_movableElements[wotogIcons], Height * Config.Instance.WotogIconsOpponentVertical / 100);
+					Canvas.SetLeft(_movableElements[wotogIcons], Helper.GetScaledXPos(Config.Instance.WotogIconsOpponentHorizontal / 100, (int)Width, ScreenRatio));
+					return;
 				}
 			}
 
@@ -112,28 +158,6 @@ namespace Hearthstone_Deck_Tracker.Windows
 					return;
 				}
 			}
-
-			var grid = _selectedUiElement as Grid;
-			if (grid != null)
-			{
-				if (grid.Equals(IconBoardAttackPlayer))
-				{
-					Config.Instance.AttackIconPlayerVerticalPosition += delta.Y / Height;
-					Config.Instance.AttackIconPlayerHorizontalPosition += delta.X / (Width * ScreenRatio);
-					Canvas.SetTop(_movableElements[grid], Height * Config.Instance.AttackIconPlayerVerticalPosition / 100);
-					Canvas.SetLeft(_movableElements[grid],
-								   Helper.GetScaledXPos(Config.Instance.AttackIconPlayerHorizontalPosition / 100, (int)Width, ScreenRatio));
-					return;
-				}
-				if (grid.Equals(IconBoardAttackOpponent))
-				{
-					Config.Instance.AttackIconOpponentVerticalPosition += delta.Y / Height;
-					Config.Instance.AttackIconOpponentHorizontalPosition += delta.X / (Width * ScreenRatio);
-					Canvas.SetTop(_movableElements[grid], Height * Config.Instance.AttackIconOpponentVerticalPosition / 100);
-					Canvas.SetLeft(_movableElements[grid],
-								   Helper.GetScaledXPos(Config.Instance.AttackIconOpponentHorizontalPosition / 100, (int)Width, ScreenRatio));
-				}
-			}
 		}
 
 		private void MouseInputOnLmbDown(object sender, EventArgs eventArgs)
@@ -150,24 +174,30 @@ namespace Hearthstone_Deck_Tracker.Windows
 				foreach (var movableElement in _movableElements)
 				{
 					var relativePos = movableElement.Value.PointFromScreen(_mousePos);
-					var panel = movableElement.Key as StackPanel;
-					if (panel != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
+					var border = movableElement.Key as Border;
+					if(border != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
 					{
-						if (Math.Abs(relativePos.X - movableElement.Value.ActualWidth) < 30
+						if(Math.Abs(relativePos.X - movableElement.Value.ActualWidth) < 30
 						   && Math.Abs(relativePos.Y - movableElement.Value.ActualHeight) < 30)
 							_resizeElement = true;
 
 						_selectedUiElement = movableElement.Key;
 						return;
 					}
-					var timer = movableElement.Key as HearthstoneTextBlock;
-					if (timer != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
+					var panel = movableElement.Key as Panel;
+					if(panel != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
 					{
 						_selectedUiElement = movableElement.Key;
 						return;
 					}
-					var grid = movableElement.Key as Grid;
-					if (grid != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
+					var timer = movableElement.Key as HearthstoneTextBlock;
+					if(timer != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
+					{
+						_selectedUiElement = movableElement.Key;
+						return;
+					}
+					var wotogIcons = movableElement.Key as WotogCounter;
+					if(wotogIcons != null && PointInsideControl(relativePos, movableElement.Value.ActualWidth, movableElement.Value.ActualHeight))
 					{
 						_selectedUiElement = movableElement.Key;
 						return;
@@ -197,6 +227,8 @@ namespace Hearthstone_Deck_Tracker.Windows
 				}
 				if (LblTurnTime.Visibility != Visibility.Visible)
 					ShowTimers();
+				WotogIconsPlayer.ForceShow(true);
+				WotogIconsOpponent.ForceShow(true);
 				foreach (var movableElement in _movableElements)
 				{
 					try
@@ -210,28 +242,35 @@ namespace Hearthstone_Deck_Tracker.Windows
 						Canvas.SetLeft(movableElement.Value, Canvas.GetLeft(movableElement.Key));
 
 						var elementSize = GetUiElementSize(movableElement.Key);
-						if (movableElement.Key == StackPanelPlayer)
+						if (movableElement.Key == BorderStackPanelPlayer)
 						{
 							if (!TrySetResizeGripHeight(movableElement.Value, Config.Instance.PlayerDeckHeight * Height / 100))
 							{
 								Config.Instance.Reset("PlayerDeckHeight");
 								TrySetResizeGripHeight(movableElement.Value, Config.Instance.PlayerDeckHeight * Height / 100);
 							}
+							movableElement.Value.Width = elementSize.Width > 0 ? elementSize.Width * Config.Instance.OverlayPlayerScaling/100 : 0;
 						}
-						else if (movableElement.Key == StackPanelOpponent)
+						else if (movableElement.Key == BorderStackPanelOpponent)
 						{
 							if (!TrySetResizeGripHeight(movableElement.Value, Config.Instance.OpponentDeckHeight * Height / 100))
 							{
 								Config.Instance.Reset("OpponentDeckHeight");
 								TrySetResizeGripHeight(movableElement.Value, Config.Instance.OpponentDeckHeight * Height / 100);
 							}
+							movableElement.Value.Width = elementSize.Width > 0 ? elementSize.Width * Config.Instance.OverlayOpponentScaling / 100 : 0;
 						}
-						else if (movableElement.Key == StackPanelSecrets)
+						else if(movableElement.Key == StackPanelSecrets)
+						{
 							movableElement.Value.Height = StackPanelSecrets.ActualHeight > 0 ? StackPanelSecrets.ActualHeight : 0;
+							movableElement.Value.Width = elementSize.Width > 0 ? elementSize.Width : 0;
+						}
 						else
+						{
 							movableElement.Value.Height = elementSize.Height > 0 ? elementSize.Height : 0;
+							movableElement.Value.Width = elementSize.Width > 0 ? elementSize.Width : 0;
+						}
 
-						movableElement.Value.Width = elementSize.Width > 0 ? elementSize.Width : 0;
 
 						movableElement.Value.Visibility = Visibility.Visible;
 					}
@@ -250,7 +289,10 @@ namespace Hearthstone_Deck_Tracker.Windows
 				if (_game.IsInMenu)
 					HideTimers();
 
-				foreach (var movableElement in _movableElements)
+				WotogIconsPlayer.ForceShow(false);
+				WotogIconsOpponent.ForceShow(false);
+
+				foreach(var movableElement in _movableElements)
 					movableElement.Value.Visibility = Visibility.Collapsed;
 			}
 
@@ -269,15 +311,18 @@ namespace Hearthstone_Deck_Tracker.Windows
 		{
 			if (element == null)
 				return new Size();
-			var panel = element as StackPanel;
-			if (panel != null)
+			var border = element as Border;
+			if(border != null)
+				return new Size(border.ActualWidth, border.ActualHeight);
+			var panel = element as Panel;
+			if(panel != null)
 				return new Size(panel.ActualWidth, panel.ActualHeight);
 			var block = element as HearthstoneTextBlock;
 			if (block != null)
 				return new Size(block.ActualWidth, block.ActualHeight);
-			var grid = element as Grid;
-			if (grid != null)
-				return new Size(grid.ActualWidth, grid.ActualHeight);
+			var wotogIcons = element as WotogCounter;
+			if(wotogIcons != null)
+				return new Size(wotogIcons.IconWidth * _wotogSize, wotogIcons.ActualHeight * _wotogSize);
 			return new Size();
 		}
 		public void HookMouse()
@@ -315,56 +360,59 @@ namespace Hearthstone_Deck_Tracker.Windows
 
 		private async void HideCardsWhenFriendsListOpen(Point clickPos)
 		{
-			var panels = new List<StackPanel>();
-			if (Canvas.GetLeft(StackPanelPlayer) - 200 < 500)
-				panels.Add(StackPanelPlayer);
-			if (Canvas.GetLeft(StackPanelOpponent) < 500)
-				panels.Add(StackPanelOpponent);
+			var panels = new List<Border>();
+			if (Canvas.GetLeft(BorderStackPanelPlayer) - 200 < 500)
+				panels.Add(BorderStackPanelPlayer);
+			if (Canvas.GetLeft(BorderStackPanelOpponent) < 500)
+				panels.Add(BorderStackPanelOpponent);
 
 			_isFriendsListOpen = null;
-			if (panels.Count > 0 && !Config.Instance.HideDecksInOverlay)
+			if(Config.Instance.HideDecksInOverlay)
+				return;
+			foreach (var panel in panels)
 			{
-				foreach (var panel in panels)
+				//if panel visible, only continue of click was in the button left corner
+				if (!(clickPos.X < 150 && clickPos.Y > Height - 100) && panel.Visibility == Visibility.Visible)
+					continue;
+
+				var checkForFriendsList = true;
+				if (panel.Equals(BorderStackPanelPlayer) && Config.Instance.HidePlayerCards)
+					checkForFriendsList = false;
+				else if (panel.Equals(BorderStackPanelOpponent) && Config.Instance.HideOpponentCards)
+					checkForFriendsList = false;
+				if(!checkForFriendsList)
+					continue;
+				if (_isFriendsListOpen == null)
+					_isFriendsListOpen = await Helper.FriendsListOpen();
+				if (_isFriendsListOpen.Value)
 				{
-					//if panel visible, only continue of click was in the button left corner
-					if (!(clickPos.X < 150 && clickPos.Y > Height - 100) && panel.Visibility == Visibility.Visible)
+					var childPanel = Helper.FindVisualChildren<StackPanel>(panel).FirstOrDefault();
+					if(childPanel == null)
 						continue;
-
-					var checkForFriendsList = true;
-					if (panel.Equals(StackPanelPlayer) && Config.Instance.HidePlayerCards)
-						checkForFriendsList = false;
-					else if (panel.Equals(StackPanelOpponent) && Config.Instance.HideOpponentCards)
-						checkForFriendsList = false;
-
-					if (checkForFriendsList)
+					var panelHeight = Canvas.GetTop(panel) + childPanel.ActualHeight;
+					if(childPanel.VerticalAlignment == VerticalAlignment.Center)
+						panelHeight += panel.ActualHeight / 2 - childPanel.ActualHeight / 2;
+					var needToHide = panelHeight > Height * 0.3;
+					if(needToHide)
 					{
-						if (_isFriendsListOpen == null)
-							_isFriendsListOpen = await Helper.FriendsListOpen();
-						if (_isFriendsListOpen.Value)
-						{
-							var needToHide = Canvas.GetTop(panel) + panel.ActualHeight > Height * 0.3;
-							if (needToHide)
-							{
-								var isPlayerPanel = panel.Equals(StackPanelPlayer);
-								Log.Info("Friendslist is open! Hiding " + (isPlayerPanel ? "player" : "opponent") + " panel.");
-								panel.Visibility = Visibility.Collapsed;
-								if (isPlayerPanel)
-									_playerCardsHidden = true;
-								else
-									_opponentCardsHidden = true;
-							}
-						}
-						else if (panel.Visibility == Visibility.Collapsed)
-						{
-							if (!(_game.IsInMenu && Config.Instance.HideInMenu))
-							{
-								panel.Visibility = Visibility.Visible;
-								if (panel.Equals(StackPanelPlayer))
-									_playerCardsHidden = false;
-								else
-									_opponentCardsHidden = false;
-							}
-						}
+						var isPlayerPanel = panel.Equals(BorderStackPanelPlayer);
+						Log.Info("Friendslist is open! Hiding " + (isPlayerPanel ? "player" : "opponent") + " panel.");
+						panel.Visibility = Visibility.Collapsed;
+						if(isPlayerPanel)
+							_playerCardsHidden = true;
+						else
+							_opponentCardsHidden = true;
+					}
+				}
+				else if (panel.Visibility == Visibility.Collapsed)
+				{
+					if (!(_game.IsInMenu && Config.Instance.HideInMenu))
+					{
+						panel.Visibility = Visibility.Visible;
+						if (panel.Equals(BorderStackPanelPlayer))
+							_playerCardsHidden = false;
+						else
+							_opponentCardsHidden = false;
 					}
 				}
 			}

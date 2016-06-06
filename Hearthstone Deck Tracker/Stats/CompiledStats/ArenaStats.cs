@@ -30,62 +30,29 @@ namespace Hearthstone_Deck_Tracker.Stats.CompiledStats
 
 		public int PacksCountTgt => GetFilteredRuns().Sum(x => x.Packs.Count(p => p == ArenaRewardPacks.TheGrandTournament));
 
+		public int PacksCountWotog => GetFilteredRuns().Sum(x => x.Packs.Count(p => p == ArenaRewardPacks.WhispersOfTheOldGods));
+
 		public int PacksCountTotal => GetFilteredRuns().Sum(x => x.PackCount);
 
-		public double PacksCountAveragePerRun
-		{
-			get
-			{
-				var count = GetFilteredRuns(requirePackReward: true).Count();
-				return count == 0 ? 0 : Math.Round(1.0 * PacksCountTotal / count, 2);
-			}
-		}
+		public double PacksCountAveragePerRun => Math.Round(GetFilteredRuns(requireAnyReward: true).Select(x => x.PackCount).DefaultIfEmpty(0).Average(), 2);
 
 		public int GoldTotal => GetFilteredRuns().Sum(x => x.Gold);
 
-		public double GoldAveragePerRun
-		{
-			get
-			{
-				var count = GetFilteredRuns(requirePackReward: true).Count();
-				return count == 0 ? 0 : Math.Round(1.0 * GoldTotal / count, 2);
-			}
-		}
+		public double GoldAveragePerRun => Math.Round(GetFilteredRuns(requireAnyReward: true).Select(x => x.Gold).DefaultIfEmpty(0).Average(), 2);
 
 		public int GoldSpent => GetFilteredRuns().Count(x => x.Deck.ArenaReward.PaymentMethod == ArenaPaymentMethod.Gold) * 150;
 
 		public int DustTotal => GetFilteredRuns().Sum(x => x.Dust);
 
-		public double DustAveragePerRun
-		{
-			get
-			{
-				var count = GetFilteredRuns(requirePackReward: true).Count();
-				return count == 0 ? 0 : Math.Round(1.0 * DustTotal / count, 2);
-			}
-		}
+		public double DustAveragePerRun => Math.Round(GetFilteredRuns(requireAnyReward: true).Select(x => x.Dust).DefaultIfEmpty(0).Average(), 2);
 
 		public int CardCountTotal => GetFilteredRuns().Sum(x => x.CardCount);
 
-		public double CardCountAveragePerRun
-		{
-			get
-			{
-				var count = GetFilteredRuns(requirePackReward: true).Count();
-				return count == 0 ? 0 : Math.Round(1.0 * CardCountTotal / count, 2);
-			}
-		}
+		public double CardCountAveragePerRun => Math.Round(GetFilteredRuns(requireAnyReward: true).Select(x => x.CardCount).DefaultIfEmpty(0).Average(), 2);
 
 		public int CardCountGolden => GetFilteredRuns().Sum(x => x.CardCountGolden);
 
-		public double CardCountGoldenAveragePerRun
-		{
-			get
-			{
-				var count = GetFilteredRuns(requirePackReward: true).Count();
-				return count == 0 ? 0 : Math.Round(1.0 * CardCountGolden / count, 2);
-			}
-		}
+		public double CardCountGoldenAveragePerRun => Math.Round(GetFilteredRuns(requireAnyReward: true).Select(x => x.CardCountGolden).DefaultIfEmpty(0).Average(), 2);
 
 		public ClassStats ClassStatsBest => !ClassStats.Any() ? null : ClassStats.OrderByDescending(x => x.WinRate).First();
 		public ClassStats ClassStatsWorst => !ClassStats.Any() ? null : ClassStats.OrderBy(x => x.WinRate).First();
@@ -241,11 +208,11 @@ namespace Hearthstone_Deck_Tracker.Stats.CompiledStats
 		}
 
 		public IEnumerable<ArenaRun> GetFilteredRuns(bool archivedFilter = true, bool classFilter = true, bool regionFilter = true,
-		                                             bool timeframeFilter = true, bool requirePackReward = false)
+		                                             bool timeframeFilter = true, bool requireAnyReward = false)
 		{
 			var filtered = Runs;
-			if(requirePackReward)
-				filtered = filtered.Where(x => x.PackCount > 0);
+			if(requireAnyReward)
+				filtered = filtered.Where(x => x.PackCount > 0 || x.Gold > 0 || x.Dust > 0 || x.CardCount > 0);
 			if (archivedFilter && !Config.Instance.ArenaStatsIncludeArchived)
 				filtered = filtered.Where(x => !x.Deck.Archived);
 			if(classFilter && Config.Instance.ArenaStatsClassFilter != HeroClassStatsFilter.All)
@@ -262,7 +229,18 @@ namespace Hearthstone_Deck_Tracker.Stats.CompiledStats
 					case DisplayedTimeFrame.AllTime:
 						break;
 					case DisplayedTimeFrame.CurrentSeason:
-						filtered = filtered.Where(g => g.StartTime > new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1));
+						filtered = filtered.Where(g => g.StartTime >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1));
+						break;
+					case DisplayedTimeFrame.LastSeason:
+						filtered = filtered.Where(g => g.StartTime >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1)
+													&& g.StartTime < new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1));
+						break;
+					case DisplayedTimeFrame.CustomSeason:
+						var current = Helper.CurrentSeason;
+						filtered = filtered.Where(g => g.StartTime >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
+																		.AddMonths(Config.Instance.ArenaStatsCustomSeasonMin - current)
+													&& g.StartTime < new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)
+																		.AddMonths(Config.Instance.ArenaStatsCustomSeasonMax - current + 1));
 						break;
 					case DisplayedTimeFrame.ThisWeek:
 						filtered = filtered.Where(g => g.StartTime > DateTime.Today.AddDays(-((int)g.StartTime.DayOfWeek + 1)));
@@ -331,6 +309,7 @@ namespace Hearthstone_Deck_Tracker.Stats.CompiledStats
 			OnPropertyChanged(nameof(PacksCountClassic));
 			OnPropertyChanged(nameof(PacksCountGvg));
 			OnPropertyChanged(nameof(PacksCountTgt));
+			OnPropertyChanged(nameof(PacksCountWotog));
 			OnPropertyChanged(nameof(PacksCountTotal));
 			OnPropertyChanged(nameof(PacksCountAveragePerRun));
 			OnPropertyChanged(nameof(CardCountTotal));

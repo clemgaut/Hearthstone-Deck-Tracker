@@ -7,7 +7,6 @@ using System.Text.RegularExpressions;
 using HearthDb;
 using HearthDb.Enums;
 using Hearthstone_Deck_Tracker.Utility.Logging;
-using Rarity = Hearthstone_Deck_Tracker.Enums.Rarity;
 
 #endregion
 
@@ -23,7 +22,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 			if(Cards.All.TryGetValue(cardId, out dbCard))
 				return new Card(dbCard);
 			Log.Warn("Could not find card with ID=" + cardId);
-			return new Card(cardId, null, Rarity.Free, "Minion", "UNKNOWN", 0, "UNKNOWN", 0, 1, "", "", 0, 0, "UNKNOWN", null, 0, "", "");
+			return UnknownCard;
 		}
 
 		public static Card GetCardFromName(string name, bool localized = false, bool showErrorMessage = true, bool collectible = true)
@@ -43,7 +42,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 			}
 			if(showErrorMessage)
 				Log.Warn("Could not get card from name: " + name);
-			return new Card("UNKNOWN", null, Rarity.Free, "Minion", name, 0, name, 0, 1, "", "", 0, 0, "UNKNOWN", null, 0, "", "");
+			return UnknownCard;
 		}
 
 		public static List<Card> GetActualCards() => Cards.Collectible.Values.Select(x => new Card(x)).ToList();
@@ -62,18 +61,6 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 			return card.Name;
 		}
 
-		public static bool IsHero(string cardId)
-		{
-			if(string.IsNullOrEmpty(cardId))
-				return false;
-			string name;
-			var baseId = GetBaseId(cardId);
-			if (CardIds.HeroIdDict.TryGetValue(baseId, out name))
-				return true;
-			var card = GetCardFromId(baseId);
-			return !string.IsNullOrEmpty(card?.Name) && card.Name != "UNKNOWN" && card.Type == "Hero";
-		}
-
 		private static string GetBaseId(string cardId)
 		{
 			if(string.IsNullOrEmpty(cardId))
@@ -83,5 +70,9 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 		}
 
 		public static bool IsActualCard(Card card) => card != null && Cards.Collectible.ContainsKey(card.Id);
+
+		public static Card UnknownCard => new Card(Cards.All[HearthDb.CardIds.NonCollectible.Neutral.Noooooooooooo]);
+
+		public static string UnknownCardId => HearthDb.CardIds.NonCollectible.Neutral.Noooooooooooo;
 	}
 }

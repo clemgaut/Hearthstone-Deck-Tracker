@@ -93,7 +93,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 
 		public Deck(string name, string className, IEnumerable<Card> cards, IEnumerable<string> tags, string note, string url,
 		            DateTime lastEdited, bool archived, List<Card> missingCards, SerializableVersion version, IEnumerable<Deck> versions,
-		            bool? syncWithHearthStats, string hearthStatsId, Guid deckId, string hearthStatsDeckVersionId,
+		            bool? syncWithHearthStats, string hearthStatsId, Guid deckId, string hearthStatsDeckVersionId, long hsId = 0,
 		            string hearthStatsIdClone = null, SerializableVersion selectedVersion = null, bool? isArenaDeck = null,
 		            ArenaReward reward = null)
 
@@ -127,6 +127,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 			}
 			if(reward != null)
 				_arenaReward = reward;
+			HsId = hsId;
 		}
 
 		public bool Archived
@@ -139,6 +140,8 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 				OnPropertyChanged(nameof(ArchivedVisibility));
 			}
 		}
+
+		public long HsId { get; set; }
 
 		public string Note
 		{
@@ -159,6 +162,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 				_selectedVersion = value;
 				OnPropertyChanged();
 				OnPropertyChanged(nameof(NameAndVersion));
+				OnPropertyChanged(nameof(StandardViableVisibility));
 			}
 		}
 
@@ -341,7 +345,8 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 		{
 			get
 			{
-				var deckStats = DeckStatsList.Instance.DeckStats.FirstOrDefault(ds => ds.BelongsToDeck(this));
+				var list = new List<DeckStats>(DeckStatsList.Instance.DeckStats);
+				var deckStats = list.FirstOrDefault(ds => ds?.BelongsToDeck(this) ?? false);
 				if(deckStats != null)
 					return deckStats;
 				deckStats = new DeckStats(this);
@@ -369,6 +374,10 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 
 		public Visibility NoteVisibility => string.IsNullOrEmpty(Note) ? Visibility.Collapsed : Visibility.Visible;
 
+		public Visibility StandardViableVisibility => StandardViable ? Visibility.Visible : Visibility.Collapsed;
+
+		public bool StandardViable => !IsArenaDeck && !GetSelectedDeckVersion().Cards.Any(x => Helper.WildOnlySets.Contains(x.Set));
+
 		public Visibility ArchivedVisibility => Archived ? Visibility.Visible : Visibility.Collapsed;
 
 		private TimeSpan ValidCacheDuration => new TimeSpan(0, 0, 1);
@@ -379,7 +388,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 		public List<Mechanic> Mechanics => _relevantMechanics.Select(x => new Mechanic(x, this)).Where(m => m.Count > 0).ToList();
 
 		public object Clone() => new Deck(Name, Class, Cards, Tags, Note, Url, LastEdited, Archived, MissingCards, Version, Versions, SyncWithHearthStats,
-										  HearthStatsId, DeckId, HearthStatsDeckVersionId, HearthStatsIdForUploading, SelectedVersion, _isArenaDeck,
+										  HearthStatsId, DeckId, HearthStatsDeckVersionId, HsId, HearthStatsIdForUploading, SelectedVersion, _isArenaDeck,
 										  ArenaReward);
 
 		public event PropertyChangedEventHandler PropertyChanged;
@@ -457,7 +466,7 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 		public bool HasVersion(SerializableVersion version) => Version == version || Versions.Any(v => v.Version == version);
 
 		public object CloneWithNewId(bool isVersion) => new Deck(Name, Class, Cards, Tags, Note, Url, LastEdited, Archived, MissingCards, Version, Versions, SyncWithHearthStats, "",
-																 Guid.NewGuid(), HearthStatsDeckVersionId, isVersion ? HearthStatsIdForUploading : "", SelectedVersion, _isArenaDeck);
+																 Guid.NewGuid(), HearthStatsDeckVersionId, HsId, isVersion ? HearthStatsIdForUploading : "", SelectedVersion, _isArenaDeck);
 
 		public void ResetVersions()
 		{
@@ -554,9 +563,15 @@ namespace Hearthstone_Deck_Tracker.Hearthstone
 		public void StatsUpdated()
 		{
 			OnPropertyChanged(nameof(StatsString));
+			OnPropertyChanged(nameof(LastPlayed));
+			OnPropertyChanged(nameof(LastPlayedNewFirst));
 			OnPropertyChanged(nameof(WinLossString));
 			OnPropertyChanged(nameof(WinPercent));
 			OnPropertyChanged(nameof(WinPercentString));
+			OnPropertyChanged(nameof(VisibilityStats));
+			OnPropertyChanged(nameof(VisibilityNoStats));
 		}
+
+		public void UpdateStandardIndicatorVisibility() => OnPropertyChanged(nameof(StandardViableVisibility));
 	}
 }

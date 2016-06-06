@@ -11,8 +11,8 @@
                       xmlns:windows="clr-namespace:Hearthstone_Deck_Tracker.Windows"
                       xmlns:stats="clr-namespace:Hearthstone_Deck_Tracker.Controls.Stats"
                       xmlns:utility="clr-namespace:Hearthstone_Deck_Tracker.Utility"
-                      Title="Hearthstone Deck Tracker" Height="603" Width="700"
-                      MinHeight="584" MinWidth="700"
+                      Title="Hearthstone Deck Tracker" Height="603" Width="720"
+                      MinHeight="584" MinWidth="720"
                       Closing="Window_Closing"
                       Icon="{StaticResource AppIcon}"
                       StateChanged="MetroWindow_StateChanged" Loaded="MetroWindow_Loaded"
@@ -107,14 +107,6 @@
                          Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
                 <local:Help x:Name="Help" />
             </controls:Flyout>
-            <controls:Flyout x:Name="FlyoutDeckStats" Position="Left" Panel.ZIndex="100"
-                         Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
-                <local:DeckStatsControl x:Name="DeckStatsFlyout" />
-            </controls:Flyout>
-            <controls:Flyout x:Name="FlyoutGameDetails" Position="Left" Panel.ZIndex="101"
-                         Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
-                <local:GameDetails x:Name="GameDetailsFlyout" />
-            </controls:Flyout>
             <controls:Flyout x:Name="FlyoutDeck" Position="Left" Panel.ZIndex="102" Width="250" Header="Opponent Deck">
                     <flyoutControls:DeckPanel x:Name="DeckFlyout" />
              </controls:Flyout>
@@ -144,7 +136,10 @@
             <controls:Flyout x:Name="FlyoutUpdateNotes" Header="Update Notes" CloseButtonVisibility="Collapsed" Position="Left" Panel.ZIndex="1" Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
                 <flyoutControls:UpdateNotes x:Name="UpdateNotesControl"/>
             </controls:Flyout>
-            <controls:Flyout x:Name="FlyoutNewStats" Position="Left" Panel.ZIndex="1" Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
+            <controls:Flyout x:Name="FlyoutDeckImporting" Header="Deck Importing" Position="Left" Panel.ZIndex="1" Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
+                <controls1:DeckImportingControl x:Name="DeckImportingFlyout"/>
+            </controls:Flyout>
+            <controls:Flyout x:Name="FlyoutStats" Position="Left" Panel.ZIndex="1" Width="{Binding Width, RelativeSource={RelativeSource AncestorType=windows:MainWindow}}">
                 <controls:Flyout.HeaderTemplate>
                     <DataTemplate>
                         <DockPanel Margin="10,13,10,8">
@@ -298,12 +293,17 @@
                         </Rectangle>
                     </MenuItem.Icon>
                     <MenuItem Header="FROM _WEB" Click="BtnWeb_Click" />
-                    <MenuItem Header="FROM GAME: _ARENA" Click="BtnArena_Click" Name="MenuItemImportArena" ToolTip="Instructions can be found in options > importing"/>
-                    <MenuItem Header="FROM GAME: _CONSTRUCTED (BETA)" Click="BtnConstructed_Click" Name="MenuItemImportConstructed" ToolTip="Instructions can be found in options > importing" />
-                    <MenuItem Header="FROM _FILE" Click="BtnFile_Click" />
-                    <MenuItem Header="FROM _ID STRING" Click="BtnIdString_Click" />
-                    <MenuItem Header="FROM CLIPBOARD: _CARD NAMES" Click="BtnClipboardText_Click" />
-                    <MenuItem Header="FROM LAST _GAME" Click="BtnLastGame_Click" />
+                    <Separator/>
+                    <MenuItem Header="FROM GAME: _CONSTRUCTED" Click="BtnConstructed_Click" Name="MenuItemImportConstructed" />
+                    <MenuItem Header="FROM GAME: _ARENA" Click="BtnArena_Click" Name="MenuItemImportArena" />
+                    <MenuItem Header="FROM GAME: _TAVERN BRAWL" Click="BtnBrawl_Click" Name="MenuItemImportBrawl" />
+                    <Separator/>
+                    <MenuItem Header="OTHER">
+                        <MenuItem Header="FROM _FILE" Click="BtnFile_Click" />
+                        <MenuItem Header="FROM _ID STRING" Click="BtnIdString_Click" />
+                        <MenuItem Header="FROM CLIPBOARD: _CARD NAMES" Click="BtnClipboardText_Click" />
+                        <MenuItem Header="FROM LAST _GAME" Click="BtnLastGame_Click" />
+                    </MenuItem>
                 </MenuItem>
                 <MenuItem Header="E_XPORT" Name="MenuItemExport">
                     <MenuItem.Icon>
@@ -319,6 +319,7 @@
                     <MenuItem Name="MenuItemExportIds" Header="COPY IDS TO _CLIPBOARD" Click="BtnClipboard_OnClick" />
                     <MenuItem Name="MenuItemExportNames" Header="COPY _NAMES TO CLIPBOARD" Click="BtnClipboardNames_OnClick" />
                     <MenuItem Name="MenuItemExportScreenshot" Header="_SCREENSHOT" Click="BtnScreenhot_Click" />
+                    <MenuItem Name="MenuItemExportScreenshotWithInfo" Header="SCREENSHOT (WITH _INFO)" Click="BtnScreenhotWithInfo_Click" />
                 </MenuItem>
                 <MenuItem Header="_STATS">
                     <MenuItem.Icon>
@@ -328,8 +329,8 @@
                             </Rectangle.Fill>
                         </Rectangle>
                     </MenuItem.Icon>
-                    <MenuItem Header="[OLD] GAMES &amp; _STATISTICS"  Click="BtnDeckStats_Click"/>
-                    <MenuItem Header="ARENA RUNS &amp; _STATISTICS"  Click="BtnDeckNewStats_Click"/>
+                    <MenuItem Header="_ARENA"  Click="BtnArenaStats_Click"/>
+                    <MenuItem Header="_CONSTRUCTED"  Click="BtnConstructedStats_Click"/>
                     <Separator/>
                     <MenuItem Header="_LATEST REPLAY" Click="MenuItemReplayLastGame_OnClick"/>
                     <MenuItem Header="_SELECT REPLAY" Click="MenuItemReplaySelectGame_OnClick" />
@@ -404,13 +405,7 @@
                 </Border>
                 <Border Name="PanelCardCount" Height="28" BorderThickness="1" BorderBrush="{DynamicResource TextBrush}" Margin="10,6,10,-4" Grid.Row="1"  Visibility="Collapsed">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Margin="0,0,2,0" Orientation="Horizontal">
-                            <TextBlock Name="TextBlockIconNaxx" Text="Naxx" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="10" Margin="2,0" ToolTip="Deck contains cards from the Curse of Naxxramas expansion."/>
-                            <TextBlock Name="TextBlockIconGvg" Text="GvG" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="10" Margin="2,0" ToolTip="Deck contains cards from the Goblins vs Gnomes expansion."/>
-                            <TextBlock Name="TextBlockIconBrm" Text="BRM" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="10" Margin="2,0" ToolTip="Deck contains cards from the Blackrock Mountain expansion."/>
-                            <TextBlock Name="TextBlockIconTgt" Text="TGT" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="10" Margin="2,0" ToolTip="Deck contains cards from the The Grand Tournament expansion."/>
-                            <TextBlock Name="TextBlockIconLoe" Text="LOE" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="10" Margin="2,0" ToolTip="Deck contains cards from the League of Explorers expansion."/>
-                        </StackPanel>
+                        <controls1:DeckSetIcons x:Name="SetIcons" DockPanel.Dock="Right" Margin="0,0,2,0" Fill="{DynamicResource TextBrush}"/>
                         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" >
                             <TextBlock Text="CARDS:" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" Margin="5,0,0,0"/>
                             <TextBlock Name="TextBlockCardCount" VerticalAlignment="Center" Text="0 / 30" FontWeight="SemiBold" FontSize="14" Margin="5,0,0,0"/>
@@ -426,8 +421,8 @@
                                     Foreground="White" FontWeight="Bold" BorderThickness="1"
                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                     ScrollViewer.VerticalScrollBarVisibility="Visible"
-                                    ScrollViewer.CanContentScroll="True" FontFamily="Arial" Margin="0,6,0,6"
-                                    HorizontalAlignment="Center" Width="235" Height="auto"
+                                    ScrollViewer.CanContentScroll="True" FontFamily="Arial" Margin="0,6,0,0"
+                                    HorizontalAlignment="Center" Width="236" Height="auto"
                                     MouseLeftButtonUp="ListViewDeck_MouseLeftButtonUp"
                                     MouseRightButtonUp="ListViewDeck_MouseRightButtonUp">
                     <ListView.Resources>
@@ -462,7 +457,7 @@
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
-                <local:ManaCurve x:Name="ManaCurveMyDecks" Grid.Row="3" Height="150" Margin="0,0,0,6" />
+                <local:ManaCurve x:Name="ManaCurveMyDecks" Grid.Row="3" Height="150" Margin="0,6,0,6" />
             </Grid>
                 <deckPicker:DeckPicker x:Name="DeckPickerList" HorizontalAlignment="Stretch" Margin="6,6,0,6" Grid.Column="0"
                               Grid.Row="2"
@@ -472,6 +467,9 @@
             <Rectangle Name="DeckPickerListCover" HorizontalAlignment="Stretch" Margin="6,6,0,6" Grid.Column="0"
                        Grid.Row="2" Panel.ZIndex="1"
                        Height="auto" Width="auto" Fill="#7F000000" Visibility="Hidden" />
+            <Label Content="{Binding IntroductionLabelText, RelativeSource={RelativeSource AncestorType=controls:MetroWindow}}" Foreground="DarkGray" 
+                   FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Grid.Column="0" Grid.Row="2" 
+                   Visibility="{Binding IntroductionLabelVisibility, RelativeSource={RelativeSource AncestorType=controls:MetroWindow}}" />
             <Menu Name="MenuNewDeck" Grid.Column="2" Grid.Row="1" Visibility="Collapsed">
                 <MenuItem Header="SAVE" Name="MenuItemSave" SubmenuOpened="MenuItem_OnSubmenuOpened">
                     <MenuItem.Icon>
@@ -536,6 +534,7 @@
                         <RadioButton Content="BLACKROCK MOUNTAIN" Click="BtnFilter_OnClick" Margin="-24,0,0,0" FontSize="14" />
                         <RadioButton Content="THE GRAND TOURNAMENT" Click="BtnFilter_OnClick" Margin="-24,0,0,0" FontSize="14" />
                         <RadioButton Content="LEAGUE OF EXPLORERS" Click="BtnFilter_OnClick" Margin="-24,0,0,0" FontSize="14" />
+                        <RadioButton Content="WHISPERS OF THE OLD GODS" Click="BtnFilter_OnClick" Margin="-24,0,0,0" FontSize="14" />
                     </MenuItem>
                 </MenuItem>
             </Menu>
@@ -549,7 +548,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,6,0,0" Grid.Row="0"
-                            Width="235" Grid.ColumnSpan="2">
+                            Width="236" Grid.ColumnSpan="2">
                     <Border Width="107"
             BorderThickness="1" DockPanel.Dock="Top" BorderBrush="{DynamicResource TextBrush}">
                         <TextBox controls:TextBoxHelper.Watermark="Name..." TextWrapping="NoWrap"
@@ -571,8 +570,14 @@
                     </Border>
                 </StackPanel>
                 <DockPanel Grid.Row="1" Grid.Column="0" Margin="0,2,0,6">
-                    <Border Name="BorderConstructedCardLimits" BorderThickness="1" BorderBrush="{DynamicResource TextBrush}" DockPanel.Dock="Bottom" Margin="0,2,0,0" HorizontalAlignment="Left" Width="235">
-                        <CheckBox Name="CheckBoxConstructedCardLimits" Content="Constructed card limits" IsChecked="True" Margin="2"/>
+                    <Border Name="BorderConstructedCardLimits" BorderThickness="1" BorderBrush="{DynamicResource TextBrush}" DockPanel.Dock="Bottom" Margin="0,2,0,0" HorizontalAlignment="Left" Width="236">
+                        <StackPanel>
+                            <CheckBox Name="CheckBoxIncludeWild" Content="Include wild-only cards" IsChecked="{Binding CardDbIncludeWildOnlyCards, Source={StaticResource ConfigWrapper}}" Margin="2" Checked="CheckBoxIncludeWild_Changed" Unchecked="CheckBoxIncludeWild_Changed"/>
+                            <CheckBox Name="CheckBoxConstructedCardLimits" Content="Constructed card limits" IsChecked="True" Margin="2"/>
+                            <Button Name="ButtonVersionHistory" Style="{StaticResource SquareButtonStyle}" Click="ButtonVersionHistory_OnClick">
+                                <TextBlock Name="TextBlockButtonVersionHistory" Text="SHOW VERSION HISTORY" />
+                            </Button>
+                        </StackPanel>
                     </Border>
                     <ListView x:Name="ListViewDB" Foreground="White" Background="#696969"
                                     FontWeight="Bold" BorderThickness="1"
@@ -580,7 +585,7 @@
                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                     ScrollViewer.CanContentScroll="True" FontFamily="Arial"
                                     HorizontalAlignment="Left"
-                                    Width="235" KeyDown="ListViewDB_KeyDown"
+                                    Width="236" KeyDown="ListViewDB_KeyDown"
                                     MouseLeftButtonUp="ListViewDB_MouseLeftButtonUp">
                         <ListView.Resources>
                             <Style TargetType="GridViewColumnHeader">
