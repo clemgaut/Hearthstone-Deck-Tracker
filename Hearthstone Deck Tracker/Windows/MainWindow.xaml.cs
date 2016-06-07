@@ -225,7 +225,7 @@ namespace Hearthstone_Deck_Tracker.Windows
                         }
                         allInfos += "]";
 
-                        allInfos += ",\"opponant_board\":[";
+                        allInfos += ",\"opponent_board\":[";
                         foreach (Entity ent in rv.OpponentBoard)
                         {
                             allInfos += "{";
