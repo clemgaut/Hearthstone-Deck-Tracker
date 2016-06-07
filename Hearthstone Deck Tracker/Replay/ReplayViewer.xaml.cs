@@ -37,14 +37,14 @@ namespace Hearthstone_Deck_Tracker.Replay
 		private readonly List<int> _collapsedTurns;
 		private readonly bool _initialized;
 		private readonly List<int> _showAllTurns;
-		private ReplayKeyPoint _currentGameState;
+		public ReplayKeyPoint _currentGameState;
 		private int _opponentController;
 		private int _playerController;
 		public List<ReplayKeyPoint> Replay;
 
 		public ReplayViewer()
 		{
-			InitializeComponent();
+			/*InitializeComponent();
 			Height = Config.Instance.ReplayWindowHeight;
 			Width = Config.Instance.ReplayWindowWidth;
 			if(Config.Instance.ReplayWindowLeft.HasValue)
@@ -63,17 +63,17 @@ namespace Hearthstone_Deck_Tracker.Replay
 			{
 				Top = 100;
 				Left = 100;
-			}
+			}*/
 			_collapsedTurns = new List<int>();
 			_showAllTurns = new List<int>();
-			CheckBoxAttack.IsChecked = Config.Instance.ReplayViewerShowAttack;
+			/*CheckBoxAttack.IsChecked = Config.Instance.ReplayViewerShowAttack;
 			CheckBoxDeath.IsChecked = Config.Instance.ReplayViewerShowDeath;
 			CheckBoxDiscard.IsChecked = Config.Instance.ReplayViewerShowDiscard;
 			CheckBoxDraw.IsChecked = Config.Instance.ReplayViewerShowDraw;
 			CheckBoxHeroPower.IsChecked = Config.Instance.ReplayViewerShowHeroPower;
 			CheckBoxPlay.IsChecked = Config.Instance.ReplayViewerShowPlay;
 			CheckBoxSecret.IsChecked = Config.Instance.ReplayViewerShowSecret;
-			CheckBoxSummon.IsChecked = Config.Instance.ReplayViewerShowSummon;
+			CheckBoxSummon.IsChecked = Config.Instance.ReplayViewerShowSummon;*/
 			_initialized = true;
 		}
 
@@ -498,7 +498,24 @@ namespace Hearthstone_Deck_Tracker.Replay
 			DataContext = this;
 		}
 
-		public void ReloadKeypoints()
+        public void LoadNoUI(List<ReplayKeyPoint> replay)
+        {
+            if (replay == null || replay.Count == 0)
+                return;
+            DataGridKeyPoints.Items.Clear();
+            Replay = replay;
+            _currentGameState = Replay.FirstOrDefault(r => r.Data.Any(x => x.HasTag(PLAYER_ID)));
+            if (_currentGameState == null)
+            {
+                Log.Error("No player entity found.");
+                return;
+            }
+            _playerController = PlayerEntity.GetTag(CONTROLLER);
+            _opponentController = OpponentEntity.GetTag(CONTROLLER);
+            DataContext = this;
+        }
+
+        public void ReloadKeypoints()
 		{
 			Load(Replay);
 		}

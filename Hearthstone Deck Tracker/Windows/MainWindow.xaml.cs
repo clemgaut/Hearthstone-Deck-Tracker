@@ -21,9 +21,11 @@ using Hearthstone_Deck_Tracker.Controls.DeckPicker;
 using Hearthstone_Deck_Tracker.Controls.Error;
 using Hearthstone_Deck_Tracker.Hearthstone;
 using Hearthstone_Deck_Tracker.HearthStats.API;
+using Hearthstone_Deck_Tracker.Hearthstone.Entities;
 using Hearthstone_Deck_Tracker.LogReader;
 using Hearthstone_Deck_Tracker.Plugins;
 using Hearthstone_Deck_Tracker.Replay;
+using Hearthstone_Deck_Tracker.Enums;
 using Hearthstone_Deck_Tracker.Stats;
 using Hearthstone_Deck_Tracker.Utility;
 using Hearthstone_Deck_Tracker.Utility.Extensions;
@@ -166,10 +168,102 @@ namespace Hearthstone_Deck_Tracker.Windows
 
             string outputDir = Helper.ShowDirectoryDialog("");
 
+            File.WriteAllText(Path.Combine(outputDir, "test_len"), filePaths.Length.ToString());
 
             foreach (string fname in filePaths)
             {
-                DeckStatsControl.saveReplaySimpleLog(fname, outputDir);
+                /* We will use the replayviewer class to get infos about each replay */
+                ReplayViewerNoUi rv;
+                List<ReplayKeyPoint> replay;
+
+                replay = ReplayReader.LoadReplay(fname);
+                rv = new ReplayViewerNoUi();
+                rv.LoadNoUI(replay);
+
+                String allInfos = "{";
+
+                int currentTurn = 0; // Current turn is 0 and not -1 to avoid checking mulligan
+                bool lastActionInTurn = false;
+                List<String> cardsPlayed = new List<string>();
+
+                allInfos += "\"plays\":[";
+
+                for (int i=0; i<replay.Count; i++)
+                {
+                    if (i == replay.Count - 1)
+                        lastActionInTurn = true;
+                    else if (replay[i].Turn > currentTurn)
+                        lastActionInTurn = true;
+                    if (replay[i].Type == KeyPointType.Play || replay[i].Type == KeyPointType.PlaySpell || replay[i].Type == KeyPointType.HeroPower)
+                        cardsPlayed.Add(Database.GetCardFromId(replay[i].GetCardId()).Name);
+
+                    // We store some info if it is the last action of the turn
+                    if (lastActionInTurn)
+                    {
+                        ReplayKeyPoint kp = replay[i];
+                        if (currentTurn != 0)
+                            allInfos += ",";
+                        currentTurn = kp.Turn;
+                        rv._currentGameState = kp;
+                        allInfos += "{\"turn\":" + currentTurn.ToString();
+                        allInfos += ",\"cards_played\":[" + string.Join(",", cardsPlayed.Select(x => string.Format("\"{0}\"", x)).ToList()) + "]";
+                        allInfos += ",\"current_player\":" + ((kp.Player == ActivePlayer.Player) ? "\"me\"" : "\"opponent\"");
+                        allInfos += ",\"my_health\":" + rv.PlayerHealth;
+                        allInfos += ",\"opponent_health\":" + rv.OpponentHealth;
+                        //Maybe add armor ?
+                        allInfos += ",\"my_board\":[";
+                        foreach(Entity ent in rv.PlayerBoard)
+                        {
+                            allInfos += "{";
+                            allInfos += "\"card_name\":\"" + ent.Card.Name + "\"";
+                            allInfos += ",\"card_health\":" + ent.Health;
+                            allInfos += ",\"card_attack\":" + ent.Attack;
+                            allInfos += "}";
+
+                            if (ent != rv.PlayerBoard.Last())
+                                allInfos += ",";
+                        }
+                        allInfos += "]";
+
+                        allInfos += ",\"opponant_board\":[";
+                        foreach (Entity ent in rv.OpponentBoard)
+                        {
+                            allInfos += "{";
+                            allInfos += "\"card_name\":\"" + ent.Card.Name + "\"";
+                            allInfos += ",\"card_health\":" + ent.Health;
+                            allInfos += ",\"card_attack\":" + ent.Attack;
+                            allInfos += "}";
+
+                            if (ent != rv.OpponentBoard.Last())
+                                allInfos += ",";
+                        }
+                        allInfos += "]";
+
+                        /**
+                        ** Insert future json values in here
+                        **/
+
+                        // End of turn here
+                        allInfos += "}";
+
+                        lastActionInTurn = false;
+                        cardsPlayed = new List<string>();
+                    }
+                }
+                allInfos += "]";
+
+                allInfos += ",\"result\":";
+                if (replay.Last().Type == KeyPointType.Defeat)
+                    allInfos += "\"defeat\"";
+                else if (replay.Last().Type == KeyPointType.Draw)
+                    allInfos += "\"draw\"";
+                else if (replay.Last().Type == KeyPointType.Victory)
+                    allInfos += "\"victory\"";
+                else
+                    allInfos += "\"unknown\"";
+
+                allInfos += "}";
+                File.WriteAllText(Path.Combine(outputDir, Path.GetFileNameWithoutExtension(fname)+".json"), allInfos);
             }
             // Old function
             /*try

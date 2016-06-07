@@ -57,7 +57,7 @@ namespace Hearthstone_Deck_Tracker.LogReader
 			InitializeGameState(game);
 			InitializeLogReaders();
 			_startingPoint = GetStartingPoint();
-			StartLogReaders();
+			//StartLogReaders();
 		}
 
 		private static async Task FindHearthstone()
