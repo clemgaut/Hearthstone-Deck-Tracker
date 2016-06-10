@@ -335,6 +335,7 @@
                     <MenuItem Header="_LATEST REPLAY" Click="MenuItemReplayLastGame_OnClick"/>
                     <MenuItem Header="_SELECT REPLAY" Click="MenuItemReplaySelectGame_OnClick" />
                     <MenuItem Header="Replay as simple logs" Click="MenuItemReplayFromFile_OnClick"/>
+                    <MenuItem Header="Extract cards" Click="MenuItemExtractCards_OnClick"/>
                 </MenuItem>
                 <MenuItem Header="_HEARTHSTATS" SubmenuOpened="MenuItemHearthStats_OnSubmenuOpened">
                     <MenuItem.Icon>

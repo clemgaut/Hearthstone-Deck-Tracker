@@ -159,16 +159,44 @@ namespace Hearthstone_Deck_Tracker.Windows
 		}
 
         /*
+        ** Extracts cards 
+        */
+        private void  MenuItemExtractCards_OnClick(object sender, RoutedEventArgs e)
+        {
+            string outputDir = Helper.ShowDirectoryDialog("");
+
+            var allCards = Database.GetActualCards();
+
+            File.WriteAllText(Path.Combine(outputDir, "test_len"), allCards.Count.ToString());
+
+            int i = 0;
+            foreach (Card c in allCards)
+            {
+                string cardDescr = "{";
+                cardDescr += "\"name\":\"" + c.Name + "\"";
+                cardDescr += ",\"attack\":" + c.Attack;
+                cardDescr += ",\"heatlth\":" + c.DurabilityOrHealth;
+                cardDescr += ",\"mechanics\":[" + String.Join(",", c.Mechanics.Select(x => string.Format("\"{0}\"", x)).ToList()) + "]";
+                cardDescr += ",\"cost\":" + c.Cost;
+                cardDescr += ",\"overload\":" + c.Overload;
+                cardDescr += ",\"race\":\"" + c.RaceOrType + "\"";
+                cardDescr += ",\"rarity\":\"" + c.Rarity + "\"";
+                cardDescr += ",\"set\":\"" + c.Set + "\"";
+                cardDescr += "}";
+                File.WriteAllText(Path.Combine(outputDir, i.ToString() +".json"), cardDescr);
+                i++;
+            }
+        }
+
+        /*
         **  Modified function, loads replays from a directory and export logs
         */
-		private void MenuItemReplayFromFile_OnClick(object sender, RoutedEventArgs e)
+        private void MenuItemReplayFromFile_OnClick(object sender, RoutedEventArgs e)
 		{
             string inputDir = Helper.ShowDirectoryDialog("");
             string[] filePaths = Directory.GetFiles(inputDir, "*.hdtreplay");
 
             string outputDir = Helper.ShowDirectoryDialog("");
-
-            File.WriteAllText(Path.Combine(outputDir, "test_len"), filePaths.Length.ToString());
 
             foreach (string fname in filePaths)
             {
