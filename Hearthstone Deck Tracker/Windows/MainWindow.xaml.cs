@@ -213,15 +213,24 @@ namespace Hearthstone_Deck_Tracker.Windows
                 int currentTurn = 0; // Current turn is 0 and not -1 to avoid checking mulligan
                 bool lastActionInTurn = false;
                 List<String> cardsPlayed = new List<string>();
-
+                int idTurnPlayer = 0;
                 allInfos += "\"plays\":[";
 
                 for (int i=0; i<replay.Count; i++)
                 {
-                    if (i == replay.Count - 1)
+                    if (i < replay.Count - 1)
+                    {
+                        if (replay[i + 1].Turn > currentTurn)
+                        {
+                            idTurnPlayer = i + 1; //player next turn
+                            lastActionInTurn = true;
+                        }
+                    }
+                    else
+                    {
                         lastActionInTurn = true;
-                    else if (replay[i].Turn > currentTurn)
-                        lastActionInTurn = true;
+
+                    }
                     if (replay[i].Type == KeyPointType.Play || replay[i].Type == KeyPointType.PlaySpell || replay[i].Type == KeyPointType.HeroPower)
                         cardsPlayed.Add(Database.GetCardFromId(replay[i].GetCardId()).Name);
 
@@ -235,9 +244,23 @@ namespace Hearthstone_Deck_Tracker.Windows
                         rv._currentGameState = kp;
                         allInfos += "{\"turn\":" + currentTurn.ToString();
                         allInfos += ",\"cards_played\":[" + string.Join(",", cardsPlayed.Select(x => string.Format("\"{0}\"", x)).ToList()) + "]";
-                        allInfos += ",\"current_player\":" + ((kp.Player == ActivePlayer.Player) ? "\"me\"" : "\"opponent\"");
+                        if (i < replay.Count - 1)
+                        {
+                            allInfos += ",\"current_player\":" + (!(replay[idTurnPlayer].Player == ActivePlayer.Player) ? "\"me\"" : "\"opponent\""); // We take the opposite player of the next turn
+                        }
+                        else
+                        { // special case for last turn player
+                            allInfos += ",\"current_player\":" + ((replay[idTurnPlayer].Player == ActivePlayer.Player) ? "\"me\"" : "\"opponent\""); 
+
+                        }
                         allInfos += ",\"my_health\":" + rv.PlayerHealth;
                         allInfos += ",\"opponent_health\":" + rv.OpponentHealth;
+                        allInfos += ",\"my_armor\":" + rv.PlayerArmor;
+                        allInfos += ",\"opponent_armor\":" + rv.OpponentArmor;
+                        allInfos += ",\"my_hand\":" + rv.PlayerHand.Count();
+                        allInfos += ",\"opponent_hand\":" + rv.OpponentHand.Count();
+                       
+
                         //Maybe add armor ?
                         allInfos += ",\"my_board\":[";
                         foreach(Entity ent in rv.PlayerBoard)
@@ -276,6 +299,7 @@ namespace Hearthstone_Deck_Tracker.Windows
 
                         lastActionInTurn = false;
                         cardsPlayed = new List<string>();
+                        currentTurn++;
                     }
                 }
                 allInfos += "]";
