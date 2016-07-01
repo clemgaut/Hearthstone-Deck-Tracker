@@ -244,7 +244,7 @@ namespace Hearthstone_Deck_Tracker.Windows
                         rv._currentGameState = kp;
                         allInfos += "{\"turn\":" + currentTurn.ToString();
                         allInfos += ",\"cards_played\":[" + string.Join(",", cardsPlayed.Select(x => string.Format("\"{0}\"", x)).ToList()) + "]";
-                        if (i < replay.Count - 1)
+                        if (i < replay.Count - 1 && (replay[i + 1].Turn - currentTurn) % 2 == 1)
                         {
                             allInfos += ",\"current_player\":" + (!(replay[idTurnPlayer].Player == ActivePlayer.Player) ? "\"me\"" : "\"opponent\""); // We take the opposite player of the next turn
                         }
